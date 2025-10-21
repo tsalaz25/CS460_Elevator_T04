@@ -1,3 +1,5 @@
+package API;
+
 public class SensorAPI{
     private boolean[] sensors;
 
