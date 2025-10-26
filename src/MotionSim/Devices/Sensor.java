@@ -12,17 +12,16 @@ public class Sensor{
         this.isRoof = isRoof;
     }
 
-    //I don't know if we're doing this in here or in the main function but i putting something here anway
-    public void setActive(float position){
-        //This likely won't work
-        if (position == this.position){
+    public void setActive(float position, float MARGIN){
+        if (position > this.position - MARGIN && position < this.position + MARGIN){
             this.isActive = true;
         } else {
             this.isActive = false;
         }
     }
 
-        public void setActive(boolean isActive){
-            this.isActive = isActive;
-        }
+    public boolean getActive(){
+        return isActive;
+    }
+
 }

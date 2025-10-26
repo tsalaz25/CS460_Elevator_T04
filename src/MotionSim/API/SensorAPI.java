@@ -4,24 +4,36 @@ import Devices.Sensor;
 public class SensorAPI{
     private Sensor[] sensors;
     private int sensorCount;
+    private final float MARGIN = 0.00001f;
 
     SensorAPI(Sensor[] sensors,int sensorCount){
         this.sensors = sensors;
         this.sensorCount = sensorCount;
+
     }
 
-    //currently assuming the first active sensor is the only one that matters
-    public int pollSensors(int index){
+    public int updateSensors(float position){
         for(int i = 0; i < sensorCount;i++){
-            if(i == 10){
-                return i;
-            }
+            sensors[i].setActive(position,MARGIN);
         }
         return -1;
     }
 
-    public boolean isAligned(){
+    //Still just the first active sensor
+    public Sensor pollSensors(){
+        for(int i = 0; i < sensorCount;i++){
+            if(sensors[i].getActive()){
+                return sensors[i];
+            }
+        }
 
-        return false;
+        return null;
+    }
+
+    public boolean isAligned(int floor){
+        int upper = (floor-1)*2;
+        int lower = upper + 1;
+        return sensors[upper].getActive() && sensors[lower].getActive();
+        
     }
 }
