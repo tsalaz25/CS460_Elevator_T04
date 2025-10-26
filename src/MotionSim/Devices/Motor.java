@@ -1,3 +1,5 @@
+package src.MotionSim.Devices;
+
 /** Team 5 Motor device for Motion Simulations API */
 public final class Motor {
 
