@@ -8,12 +8,11 @@ public class DemoLobbyApp extends Application {
     @Override
     public void start(Stage stage) {
         LobbyPanel panel = new LobbyPanel();
-
-        Scene scene = new Scene(panel, 360, 220);
+        Scene scene = new Scene(panel, 380, 320);
         stage.setTitle("Demo Lobby Panel");
         stage.setScene(scene);
         stage.setMinWidth(360);
-        stage.setMinHeight(240);
+        stage.setMinHeight(300);
         stage.show();
     }
 
