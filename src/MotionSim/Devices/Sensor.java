@@ -1,12 +1,12 @@
 package Devices;
 
 public class Sensor{
-    double position;
+    float position;
     boolean isActive = false;
     int floor;
     boolean isRoof;
 
-    public Sensor(double position, int floor, boolean isRoof){
+    public Sensor(float position, int floor, boolean isRoof){
         this.position = position;
         this.floor = floor;
         this.isRoof = isRoof;

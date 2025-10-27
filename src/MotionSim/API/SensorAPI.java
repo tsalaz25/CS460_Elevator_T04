@@ -12,11 +12,10 @@ public class SensorAPI{
 
     }
 
-    public int updateSensors(float position){
+    public void updateSensors(float position){
         for(int i = 0; i < sensorCount;i++){
             sensors[i].setActive(position,MARGIN);
         }
-        return -1;
     }
 
     //Still just the first active sensor
