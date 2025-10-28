@@ -84,13 +84,14 @@ public class Simulator {
             }
 
             if (phase.equals("cruise") && !triggeredDecel) {
-                double cabinBottom = pos - halfCabin;
+                double cabinBottom = pos + halfCabin - 1.2;
                 if ((direction == 1 && cabinBottom >= bottomSensor - TOLERANCE) || (direction == -1 && cabinBottom <= bottomSensor + TOLERANCE)) {
+                    System.out.printf("slowing down pos:%f endpos:%f\n",pos ,endPos);
                     phase = "decel";
                     triggeredDecel = true;
                 }
             }
-
+            
             if (phase.equals("decel") && ((direction == 1 && pos >= endPos) || (direction == -1 && pos <= endPos))) {
                 phase = "stop";
                 pos = endPos;
