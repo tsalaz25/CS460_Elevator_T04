@@ -154,6 +154,8 @@ public class Simulator {
 
     public static class SimulatorGUI extends Application {
         private static ElevatorModel model;
+        private static Rectangle[] sensorRects;
+
 
         public SimulatorGUI() {}
         @Override
@@ -184,12 +186,16 @@ public class Simulator {
             elevator.setY(screenHeight - elevatorHeight/2);
             root.getChildren().add(elevator);
 
-            drawSensors(numFloors, elevatorWidth, screenWidth, screenHeight, gapHeight, elevatorHeight, root);
+            Pane sensorPane = new Pane();
+            root.getChildren().add(sensorPane);
+
+            drawSensors(numFloors, elevatorWidth, screenWidth, screenHeight, gapHeight, elevatorHeight, sensorPane);
 
             model.positionProperty().addListener((obs, oldV, newV) -> {
                 double ratio = elevatorHeight / Simulator.FLOOR_HEIGHT;
                 double offset = gapHeight;
                 elevator.setY(screenHeight - (2 * newV.doubleValue() * ratio) + elevatorHeight/4 - offset );
+                updateSensorColors();
             });
 
             Scene scene = new Scene(root, screenWidth, screenHeight);
@@ -199,26 +205,46 @@ public class Simulator {
             new Thread(Simulator::runSimulation).start();
         }
 
-        private static void drawSensors(int numFloors, int elevatorWidth, int screenWidth, int screenHeight, int gapHeight, int elevatorHeight, Pane root) {
-            for(int floor = 0; floor < numFloors; floor++) {
-                Rectangle bottomSensor = new Rectangle(elevatorWidth, 1);
-                if(sensors[floor*2].getActive()){
-                    bottomSensor.setFill(Color.BLUE);
-                } else {
-                    bottomSensor.setFill(Color.RED);
-                }
-                bottomSensor.setX(screenWidth / 2 - elevatorWidth / 2);
-                bottomSensor.setY(screenHeight - floor * (gapHeight + elevatorHeight) - elevatorHeight /4);
-                Rectangle topSensor = new Rectangle(elevatorWidth, 1);
-                if(sensors[(floor*2)+1].getActive()){
-                    topSensor.setFill(Color.BLUE);
-                } else {
-                    topSensor.setFill(Color.RED);
-                }
-                topSensor.setX(screenWidth / 2 - elevatorWidth / 2);
-                topSensor.setY(screenHeight - floor * (gapHeight + elevatorHeight) - (3*(elevatorHeight /4)));
+        private static void drawSensors(
+                int numFloors,
+                int elevatorWidth,
+                int screenWidth,
+                int screenHeight,
+                int gapHeight,
+                int elevatorHeight,
+                Pane sensorPane) {
 
-                root.getChildren().addAll(bottomSensor, topSensor);
+            sensorRects = new Rectangle[sensors.length];
+
+            for (int floor = 0; floor < numFloors; floor++) {
+                int bottomIndex = floor * 2;
+                int topIndex = bottomIndex + 1;
+
+                if (bottomIndex < sensors.length) {
+                    Rectangle bottom = new Rectangle(elevatorWidth, 1);
+                    bottom.setX(screenWidth / 2.0 - elevatorWidth / 2.0);
+                    bottom.setY(screenHeight - floor * (gapHeight + elevatorHeight) - elevatorHeight / 4.0);
+                    bottom.setFill(sensors[bottomIndex].getActive() ? Color.GREEN : Color.YELLOW);
+                    sensorRects[bottomIndex] = bottom;
+                    sensorPane.getChildren().add(bottom);
+                }
+
+                if (topIndex < sensors.length) {
+                    Rectangle top = new Rectangle(elevatorWidth, 1);
+                    top.setX(screenWidth / 2.0 - elevatorWidth / 2.0);
+                    top.setY(screenHeight - floor * (gapHeight + elevatorHeight) - 3 * (elevatorHeight / 4.0));
+                    top.setFill(sensors[topIndex].getActive() ? Color.GREEN : Color.YELLOW);
+                    sensorRects[topIndex] = top;
+                    sensorPane.getChildren().add(top);
+                }
+            }
+        }
+
+        private static void updateSensorColors() {
+            for (int i = 0; i < sensors.length; i++) {
+                if (sensorRects[i] != null) {
+                    sensorRects[i].setFill(sensors[i].getActive() ? Color.GREEN : Color.YELLOW);
+                }
             }
         }
 
