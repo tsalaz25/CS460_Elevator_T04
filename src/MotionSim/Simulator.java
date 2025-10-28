@@ -7,6 +7,8 @@ import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
+import API.SensorAPI;
+import Devices.Sensor;
 
 public class Simulator {
     static final double FLOOR_HEIGHT = 3.0;
@@ -15,6 +17,7 @@ public class Simulator {
     static final double A_MAX = 1.0;
     static final double DT = 0.01;
     static final double TOLERANCE = 0.005;
+    static final int NUMFLOORS = 10;
 
 
 
@@ -31,6 +34,8 @@ public class Simulator {
     static double topSensor;
     static double bottomSensor;
     static ElevatorModel model;
+    static Sensor[] sensors;
+    static SensorAPI sensorAPI;
 
     public static void main(String[] args) {
         halfCabin = CABIN_HEIGHT / 2;
@@ -44,6 +49,16 @@ public class Simulator {
         totalTime = 2 * tAccel + tCruise;
 
         direction = (endPos > startPos) ? 1 : -1;
+
+        sensors = new Sensor[NUMFLOORS*2];
+
+        for(int i = 0; i<NUMFLOORS*2; i++){
+            double position = (i/2)*FLOOR_HEIGHT + (i%2)*CABIN_HEIGHT;
+            boolean isRoof = (i%2 == 1);
+            sensors[i] = new Sensor(position, i/2, isRoof);
+        }
+
+        sensorAPI = new SensorAPI(sensors,NUMFLOORS*2,TOLERANCE);
 
         bottomSensor = endPos - halfCabin;
         topSensor = endPos + halfCabin;
@@ -107,6 +122,7 @@ public class Simulator {
 
             double cabinTop = pos + halfCabin;
             double cabinBottom = pos - halfCabin;
+            sensorAPI.updateSensors(cabinTop, cabinBottom);
 
             boolean bottomTriggered = Math.abs(cabinBottom - bottomSensor) <= TOLERANCE;
             boolean aligned = Math.abs(pos - endPos) <= TOLERANCE;
@@ -181,11 +197,19 @@ public class Simulator {
         private static void drawSensors(int numFloors, int elevatorWidth, int screenWidth, int screenHeight, int gapHeight, int elevatorHeight, Pane root) {
             for(int floor = 0; floor < numFloors; floor++) {
                 Rectangle bottomSensor = new Rectangle(elevatorWidth, 1);
-                bottomSensor.setFill(Color.CHARTREUSE);
+                if(sensors[floor*2].getActive()){
+                    bottomSensor.setFill(Color.CHARTREUSE);
+                } else {
+                    bottomSensor.setFill(Color.RED);
+                }
                 bottomSensor.setX(screenWidth / 2 - elevatorWidth / 2);
                 bottomSensor.setY(screenHeight - floor * (gapHeight + elevatorHeight) - elevatorHeight /4);
                 Rectangle topSensor = new Rectangle(elevatorWidth, 1);
-                topSensor.setFill(Color.CHARTREUSE);
+                if(sensors[(floor*2)+1].getActive()){
+                    topSensor.setFill(Color.CHARTREUSE);
+                } else {
+                    topSensor.setFill(Color.RED);
+                }
                 topSensor.setX(screenWidth / 2 - elevatorWidth / 2);
                 topSensor.setY(screenHeight - floor * (gapHeight + elevatorHeight) - (3*(elevatorHeight /4)));
 

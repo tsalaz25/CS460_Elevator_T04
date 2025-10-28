@@ -4,17 +4,17 @@ import Devices.Sensor;
 public class SensorAPI{
     private Sensor[] sensors;
     private int sensorCount;
-    private final float MARGIN = 0.00001f;
+    private final double MARGIN;
 
-    SensorAPI(Sensor[] sensors,int sensorCount){
+    public SensorAPI(Sensor[] sensors,int sensorCount,double MARGIN){
         this.sensors = sensors;
         this.sensorCount = sensorCount;
-
+        this.MARGIN = MARGIN;
     }
 
-    public void updateSensors(float position){
+    public void updateSensors(double upper,double lower){
         for(int i = 0; i < sensorCount;i++){
-            sensors[i].setActive(position,MARGIN);
+            sensors[i].setActive(upper,lower,MARGIN);
         }
     }
 
