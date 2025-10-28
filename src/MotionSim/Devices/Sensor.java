@@ -13,7 +13,7 @@ public class Sensor{
     }
 
     public void setActive(double upper,double lower , double MARGIN){
-        if (Math.abs(upper - position) <= MARGIN || Math.abs(lower - position) <= MARGIN ){
+        if (position >= lower - MARGIN && position <= upper + MARGIN) {
             this.isActive = true;
         } else {
             this.isActive = false;
