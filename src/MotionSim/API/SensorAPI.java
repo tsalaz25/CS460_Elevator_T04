@@ -1,6 +1,9 @@
 package API;
 import Devices.Sensor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SensorAPI{
     private Sensor[] sensors;
     private int sensorCount;
@@ -13,20 +16,21 @@ public class SensorAPI{
     }
 
     public void updateSensors(double upper,double lower){
-        for(int i = 0; i < sensorCount;i++){
+        for(int i = 0; i < sensorCount; i++){
             sensors[i].setActive(upper,lower,MARGIN);
         }
     }
 
-    //Still just the first active sensor
-    public Sensor pollSensors(){
-        for(int i = 0; i < sensorCount;i++){
-            if(sensors[i].getActive()){
-                return sensors[i];
+    public List<Sensor> pollSensors() {
+        List<Sensor> activeSensors = new ArrayList<>();
+
+        for (int i = 0; i < sensorCount; i++) {
+            if (sensors[i].getActive()) {
+                activeSensors.add(sensors[i]);
             }
         }
 
-        return null;
+        return activeSensors;
     }
 
     public boolean isAligned(int floor){
