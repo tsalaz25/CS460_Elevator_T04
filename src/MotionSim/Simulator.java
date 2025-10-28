@@ -11,9 +11,9 @@ import API.SensorAPI;
 import Devices.Sensor;
 
 public class Simulator {
-    static final double FLOOR_HEIGHT = 3.0;
-    static final double CABIN_HEIGHT = 2.25;
-    static final double V_MAX = 1.5;
+    static final double FLOOR_HEIGHT = 4.0;
+    static final double CABIN_HEIGHT = 2;
+    static final double V_MAX = 2.0;
     static final double A_MAX = 1.0;
     static final double DT = 0.01;
     static final double TOLERANCE = 0.005;
@@ -25,7 +25,9 @@ public class Simulator {
     static double dAccel;
     static double tAccel;
     static double startPos;
+    static int startFloor;
     static double endPos;
+    static int targetFloor;
     static double distance;
     static double dCruise;
     static double tCruise;
@@ -38,11 +40,13 @@ public class Simulator {
     static SensorAPI sensorAPI;
 
     public static void main(String[] args) {
+        startFloor = 10;
+        targetFloor = 1;
         halfCabin = CABIN_HEIGHT / 2;
         dAccel = V_MAX * V_MAX / (2 * A_MAX);
         tAccel = V_MAX / A_MAX;
-        startPos = 0.0;
-        endPos = FLOOR_HEIGHT;
+        startPos = (startFloor -  1) * FLOOR_HEIGHT;
+        endPos = (targetFloor - 1) * FLOOR_HEIGHT;
         distance = Math.abs(endPos - startPos);
         dCruise = distance - 2 * dAccel;
         tCruise = (dCruise > 0) ? dCruise / V_MAX : 0;
@@ -85,7 +89,7 @@ public class Simulator {
 
             if (phase.equals("cruise") && !triggeredDecel) {
                 double cabinBottom = pos + halfCabin - 1.2;
-                if ((direction == 1 && cabinBottom >= bottomSensor - TOLERANCE) || (direction == -1 && cabinBottom <= bottomSensor + TOLERANCE)) {
+                if ((direction == 1 && cabinBottom >= bottomSensor - TOLERANCE) || (direction == -1 && cabinBottom <= topSensor + TOLERANCE)) {
                     System.out.printf("slowing down pos:%f endpos:%f\n",pos ,endPos);
                     phase = "decel";
                     triggeredDecel = true;
@@ -199,7 +203,7 @@ public class Simulator {
             for(int floor = 0; floor < numFloors; floor++) {
                 Rectangle bottomSensor = new Rectangle(elevatorWidth, 1);
                 if(sensors[floor*2].getActive()){
-                    bottomSensor.setFill(Color.CHARTREUSE);
+                    bottomSensor.setFill(Color.BLUE);
                 } else {
                     bottomSensor.setFill(Color.RED);
                 }
@@ -207,7 +211,7 @@ public class Simulator {
                 bottomSensor.setY(screenHeight - floor * (gapHeight + elevatorHeight) - elevatorHeight /4);
                 Rectangle topSensor = new Rectangle(elevatorWidth, 1);
                 if(sensors[(floor*2)+1].getActive()){
-                    topSensor.setFill(Color.CHARTREUSE);
+                    topSensor.setFill(Color.BLUE);
                 } else {
                     topSensor.setFill(Color.RED);
                 }
