@@ -30,6 +30,11 @@ public class MessageDistributor {
      */
     private ObjectOutputStream out;
 
+    /**
+     * Makes a new message distributor on a provided port number
+     *
+     * @param port the port number you are connecting to
+     */
     public MessageDistributor(int port) { //TODO maybe delete prot
         try {
             ServerSocket serverSocket = new ServerSocket(port);
@@ -63,7 +68,12 @@ public class MessageDistributor {
         }
     }
 
-    public void sendToAll(Message m) {
+    /**
+     * A method to send all connect clients a message
+     *
+     * @param m the message that will be sent
+     */
+    private void sendToAll(Message m) {
         for (ObjectOutputStream client : clients) {
             synchronized (client) {
                 try {
@@ -77,6 +87,12 @@ public class MessageDistributor {
         }
     }
 
+    /**
+     * The server connection will run by reading all incoming messages and
+     * send each one that is received to all connected clients
+     *
+     * @param in the input stream of the server
+     */
     private void run(ObjectInputStream in) {
         new Thread(() -> {
             while (true) {
@@ -96,6 +112,11 @@ public class MessageDistributor {
         }).start();
     }
 
+    /**
+     * A method for the client to get the next message they have received
+     *
+     * @return the next message recived
+     */
     public Message nextMessage() {
         try {
             Object obj = in.readObject();
@@ -105,6 +126,11 @@ public class MessageDistributor {
         }
     }
 
+    /**
+     * A method to send a message over the network
+     *
+     * @param m the message that is being sent
+     */
     public void send(Message m) {
         try {
             out.writeObject(m);
