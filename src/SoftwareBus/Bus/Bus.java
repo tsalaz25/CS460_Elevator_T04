@@ -79,8 +79,14 @@ public class Bus {
         new Thread(() -> {
             while (true) {
                 Message m = distributor.nextMessage();
-                if (subscriptions.contains(m.getTopics())) {
-                    queue.add(m);
+                for (Topic t : subscriptions) {
+                    if (t.equals(m.getTopics())) {
+                        queue.add(m);
+                        break;
+                    } else if (t.topic() == m.topicInt() && t.subtopic() == 0) {
+                        queue.add(m);
+                        break;
+                    }
                 }
             }
 
