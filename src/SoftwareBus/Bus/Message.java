@@ -7,7 +7,11 @@ public class Message implements Serializable {
     /**
      * As specified in class, the contents of a message are stored as an array of integers
      */
-    private int[] contents;
+    private int[] bodyContents;
+    /**
+     * The topic of this message instance
+     */
+    private Topic messageTopic;
 
     /**
      * To create a message, provide an integer array of the following format
@@ -18,7 +22,22 @@ public class Message implements Serializable {
      * @param contents the integer array specifying the message contents
      */
     public Message(int[] contents) {
-        this.contents = contents;
+        this.messageTopic = new Topic(contents[0],contents[1]);
+        this.bodyContents = new int[4];
+        for(int i = 2; i < contents.length; i++) {
+            bodyContents[i-2] = contents[i];
+        }
+    }
+
+    /**
+     * Given the topic of a message and the body of contents of the message, create a new
+     * instance of message
+     * @param t the topic of the message to be created
+     * @param body the body contents of the message, should have at most 4 indexes
+     */
+    public Message(Topic t, int[] body) {
+        this.messageTopic=t;
+        this.bodyContents = body;
     }
 
     /**
@@ -26,8 +45,8 @@ public class Message implements Serializable {
      *
      * @return the integer topic number of this message
      */
-    public int topic() {
-        return contents[0];
+    public int topicInt() {
+        return messageTopic.topic();
     }
 
     /**
@@ -35,8 +54,16 @@ public class Message implements Serializable {
      *
      * @return the integer subtopic number of this message
      */
-    public int subtopic() {
-        return contents[1];
+    public int subtopicInt() {
+        return messageTopic.subtopic();
+    }
+
+    /**
+     * Get the Topic instance containing topic and subtopic attributes of this message instance
+     * @return the Topic instance of this message
+     */
+    public Topic getTopics(){
+        return messageTopic;
     }
 
     /**
@@ -45,7 +72,7 @@ public class Message implements Serializable {
      * @return an integer array containing the b1...b4 fields of the message
      */
     public int[] fullBody() {
-        return new int[]{contents[2], contents[3], contents[4], contents[5]};
+        return new int[]{bodyContents[0], bodyContents[1], bodyContents[2], bodyContents[3]};
     }
 
     /**
@@ -54,7 +81,7 @@ public class Message implements Serializable {
      * @return the integer encoding the b1 field
      */
     public int bodyOne() {
-        return contents[2];
+        return bodyContents[0];
     }
 
     /**
@@ -63,7 +90,7 @@ public class Message implements Serializable {
      * @return the integer encoding the b2 field
      */
     public int bodyTwo() {
-        return contents[3];
+        return bodyContents[1];
     }
 
     /**
@@ -72,7 +99,7 @@ public class Message implements Serializable {
      * @return the integer encoding the b3 field
      */
     public int bodyThree() {
-        return contents[4];
+        return bodyContents[2];
     }
 
     /**
@@ -81,7 +108,7 @@ public class Message implements Serializable {
      * @return the integer encoding the b4 field
      */
     public int bodyFour() {
-        return contents[5];
+        return bodyContents[3];
     }
 
     /**
@@ -92,7 +119,7 @@ public class Message implements Serializable {
      * @return the string representation of this message
      */
     public String toString() {
-        return "topic: " + topic() + ", subtopic: " + subtopic() + ", BODY: " + Arrays.toString(contents);
+        return "topic: " + topicInt() + ", subtopic: " + subtopicInt() + ", BODY: " + Arrays.toString(bodyContents);
     }
 
 

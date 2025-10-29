@@ -1,6 +1,8 @@
 package SoftwareBus.Bus;
 
-public class Topic {
+import java.io.Serializable;
+
+public class Topic implements Serializable {
 
     /**
      * The topic portion of this topic object

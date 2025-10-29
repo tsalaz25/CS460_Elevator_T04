@@ -2,18 +2,17 @@ package SoftwareBus.ToasterTest;
 
 import SoftwareBus.Bus.Bus;
 import SoftwareBus.Bus.Message;
-import SoftwareBus.Bus.Topic;
 
 public class ToasterLED {
-    static Bus toasterLED = new Bus(7154);
+    static Bus toasterLED = new Bus();
     static boolean ledStatus = false;
 
     //The toaster LED is turned on when the nob is down, and turned off when the nob is up
     public static void run() {
         new Thread(() -> {
-            toasterLED.subscribe(new Topic(1, 1));
+            toasterLED.subscribe(Topics.NOB_STATUS);
             while (true) {
-                Message LEDUpdate = toasterLED.getMessage(new Topic(1, 1));
+                Message LEDUpdate = toasterLED.getMessage(Topics.NOB_STATUS);
                 if (LEDUpdate != null) {
                     if ((LEDUpdate.bodyOne() == 1) != ledStatus) {
                         System.out.print("toggling LED ");
