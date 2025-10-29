@@ -2,37 +2,48 @@ package SoftwareBus.ToasterTest;
 
 import SoftwareBus.Bus.Bus;
 import SoftwareBus.Bus.Message;
+import SoftwareBus.Bus.Topic;
 
 public class ToasterTimer {
 
-    private static Bus toasterTimer = new Bus();
-    static int timer = -1;
+    //The toaster timer processor has an instance of Bus
+    private static Bus toasterBus = new Bus();
 
-    //The toaster timer turns on when the nob is pushed down and counts down from
-    //5. Each timer update publishes a message with its new time. Pushing up the
-    //nob resets the timer
+    //The toaster timer processor needs this internal state variable to function
+    private static int timer = -1;
+
+    //The toaster nob processor operates with this process:
     public static void run() {
-
+        //Subscribe to updates on the toaster nob status
+        toasterBus.subscribe(Topics.NOB_STATUS);
+        //This thread allows the processor to run independently of the main method that called it
         new Thread(() -> {
-            toasterTimer.subscribe(Topics.NOB_STATUS);
+            //Continuously check for updates and make changes accordingly
             while (true) {
-                Message timerUpdate = toasterTimer.getMessage(Topics.NOB_STATUS);
-                if (timerUpdate == null || timer > 0) {
+                //Get the oldest unread message on the subject of the timer status
+                //  May be null if there are no unread messages
+                Message nobUpdate = toasterBus.getMessage(Topics.NOB_STATUS);
+                if (nobUpdate != null) {
+                    //If the message was not null and the nob is pushed down
+                    if (nobUpdate.bodyOne() == 1) {
+                        timer = 5;
+                        System.out.println("Timer started");
+                    } else {
+                        //If the message was not null and the nob is pushed up
+                        timer = -1;
+                        System.out.println("Timer Stopped");
+                    }
+                } else {
+                    //If the message was null, we can assume the nob has not been moved and
+                    //  countdown may continue
                     timer--;
                 }
-                if (timerUpdate != null) {
-                    if (timerUpdate.bodyOne() == 1 && timer < 0) {
-                        timer = 5;
-                        System.out.println("starting timer");
-                    } else if (timerUpdate.bodyOne() == 0 && timer == 0) {
-                        timer = -1;
-                        System.out.println("timer turned off");
-                    }
+                if (timer >= 0) {
+                    //While the timer is ticking, publish updates on the status of the timer
+                    System.out.printf("Timer at %d \n", timer);
+                    toasterBus.publish(new Message(Topics.TIMER_STATUS, new int[]{timer}));
                 }
-                toasterTimer.publish(new Message(Topics.TIMER_STATUS, new int[]{timer, 0, 0, 0}));
-                if (timer > 0) {
-                    System.out.println("timer at " + timer);
-                }
+                //Lets only look for updates and make changes once a second
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -40,6 +51,6 @@ public class ToasterTimer {
                 }
             }
         }).start();
-
     }
+
 }

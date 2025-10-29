@@ -22,21 +22,22 @@ public class Message implements Serializable {
      * @param contents the integer array specifying the message contents
      */
     public Message(int[] contents) {
-        this.messageTopic = new Topic(contents[0],contents[1]);
+        this.messageTopic = new Topic(contents[0], contents[1]);
         this.bodyContents = new int[4];
-        for(int i = 2; i < contents.length; i++) {
-            bodyContents[i-2] = contents[i];
+        for (int i = 2; i < contents.length; i++) {
+            bodyContents[i - 2] = contents[i];
         }
     }
 
     /**
      * Given the topic of a message and the body of contents of the message, create a new
      * instance of message
-     * @param t the topic of the message to be created
+     *
+     * @param t    the topic of the message to be created
      * @param body the body contents of the message, should have at most 4 indexes
      */
     public Message(Topic t, int[] body) {
-        this.messageTopic=t;
+        this.messageTopic = t;
         this.bodyContents = body;
     }
 
@@ -60,9 +61,10 @@ public class Message implements Serializable {
 
     /**
      * Get the Topic instance containing topic and subtopic attributes of this message instance
+     *
      * @return the Topic instance of this message
      */
-    public Topic getTopics(){
+    public Topic getTopics() {
         return messageTopic;
     }
 
@@ -119,7 +121,7 @@ public class Message implements Serializable {
      * @return the string representation of this message
      */
     public String toString() {
-        return "topic: " + topicInt() + ", subtopic: " + subtopicInt() + ", BODY: " + Arrays.toString(bodyContents);
+        return messageTopic.toString() + ", body fields: " + Arrays.toString(bodyContents);
     }
 
 

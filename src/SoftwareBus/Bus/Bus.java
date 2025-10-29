@@ -22,8 +22,8 @@ public class Bus {
     }
 
     public Message getMessage(Topic t) {
-        for(Message m : this.queue) {
-            if(m.getTopics().equals(t)) {
+        for (Message m : this.queue) {
+            if (m.getTopics().equals(t)) {
                 queue.remove(m);
                 return m;
             }
@@ -35,11 +35,11 @@ public class Bus {
         distributor.send(m);
     }
 
-    private void updateQueue(){
+    private void updateQueue() {
         new Thread(() -> {
-            while(true){
+            while (true) {
                 Message m = distributor.nextMessage();
-                if(subscriptions.contains(m.getTopics())) {
+                if (subscriptions.contains(m.getTopics())) {
                     queue.add(m);
                 }
             }
