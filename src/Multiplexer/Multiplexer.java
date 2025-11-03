@@ -18,6 +18,7 @@ public class Multiplexer {
     private final Topic ELEVATOR_DIRECTION;
     private final Topic ELEVATOR_DOOR;
     private final Topic ELEVATOR_OVERWEIGHT;
+    private final Topic FLOOR_COMMAND;
 
     //Inputs
     private final Topic ELEVATOR_MODE;
@@ -30,7 +31,7 @@ public class Multiplexer {
     private Bus bus = new Bus();
 
     /*
-     * Constructs a Multiplexer and then begins
+     * Constructs a Multiplexer and then begins polling for input from devices and from 
      * 
      * 
      */
@@ -41,6 +42,8 @@ public class Multiplexer {
         ELEVATOR_DOOR = new Topic(3,ID);
         ELEVATOR_OVERWEIGHT = new Topic(4,ID);
         ELEVATOR_MODE = new Topic(7,ID); 
+        //TODO: No idea what this Topic will be or if we actually need it
+        FLOOR_COMMAND = new Topic(50,ID); 
 
 
         new Thread(() -> {
@@ -57,7 +60,25 @@ public class Multiplexer {
                 pollDoors();
 
                 //Input block
+                Message modeUpdate = bus.getMessage(ELEVATOR_MODE);
+                // temp invalid 
+                if(modeUpdate != null){
+                    mode = modeUpdate.bodyOne();
+                }
 
+                Message fireStatus = bus.getMessage(FIRE);
+                    if(modeUpdate != null){
+                    mode = modeUpdate.bodyOne();
+                }
+
+                //TODO: put actual mode argument here
+                if(mode == 1){
+                    Message command = bus.getMessage(FLOOR_COMMAND);
+                    if(command != null){
+                        //TODO: Move to desired floor
+                        testFloor = command.bodyOne();
+                    }
+                }
                 
             }
         });
@@ -90,8 +111,4 @@ public class Multiplexer {
         }
     }
 
-
-
-
-    
 }
