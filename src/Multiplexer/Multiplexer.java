@@ -56,13 +56,7 @@ public class    Multiplexer {
             while(true){
 
                 //Output block
-                pollRequest();
-                pollFloor();
-                pollDirection();
-                pollDoors();
-                pollFireKey();
-                pollOverweight();
-                pollState();
+                System.out.println((pollDevices(Topics.CAR_REQUEST).bodyOne()));
                 //Input block
 //                Message modeUpdate = bus.getMessage(Topics.ELEVATOR_MODE);
 //                // temp invalid
@@ -88,88 +82,16 @@ public class    Multiplexer {
         }).start();
     }
 
-    private void pollFloor(){
-        int floor = -1;
-        //TODO: Get floor info from sensors
+
+
+    private Message pollDevices(Topic topic){
         Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.ELEVATOR_FLOOR);
+        while (message == null){
+            message = bus.getMessage(topic);
         }
-        floor = message.bodyOne();
-        if(floor != -1){
-            bus.publish(new Message(Topics.ELEVATOR_FLOOR,new int[]{floor}));
-        }
+        return message;
     }
 
-    private void pollDirection(){
-        int direction = -1;
-        //TODO: Get direction info from elevator
-        Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.ELEVATOR_DIRECTION);
-        }
-        direction = message.bodyOne();
-        if(direction != -1){
-            bus.publish(new Message(Topics.ELEVATOR_DIRECTION,new int[]{direction}));
-        }
-    }
-
-    private void pollDoors(){
-        int doorStatus = -1;
-        //TODO: Get door info from elevator
-        Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.ELEVATOR_DOOR);
-        }
-        doorStatus = message.bodyOne();
-        if(doorStatus != -1){
-            bus.publish(new Message(Topics.ELEVATOR_DOOR,new int[]{doorStatus}));
-        }
-    }
-    private void pollRequest(){
-        int floorRequest = -1;
-        Message requestMessage = null;
-        while(requestMessage == null){
-            requestMessage = bus.getMessage(Topics.CAR_REQUEST);
-        }
-        floorRequest = requestMessage.bodyOne();
-        if(floorRequest != -1){
-            bus.publish(new Message(Topics.CAR_REQUEST,new int[]{floorRequest}));
-        }
-    }
-    private void pollFireKey(){
-        int fireKey = -1;
-        Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.FIRE_KEY);
-        }
-        fireKey = message.bodyOne();
-        if(fireKey != -1){
-            bus.publish(new Message(Topics.FIRE_KEY,new int[]{fireKey}));
-        }
-    }
-    private void pollOverweight(){
-        int overweight = -1;
-        Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.ELEVATOR_OVERWEIGHT);
-        }
-        overweight = message.bodyOne();
-        if(overweight != -1){
-            bus.publish(new Message(Topics.ELEVATOR_OVERWEIGHT,new int[]{overweight}));
-        }
-    }
-    private void pollState(){
-        int state = -1;
-        Message message = null;
-        while(message == null){
-            message = bus.getMessage(Topics.ELEVATOR_STATE);
-        }
-        state = message.bodyOne();
-        if(state != -1){
-            bus.publish(new Message(Topics.ELEVATOR_STATE,new int[]{state}));
-        }
-    }
 
 
 }
