@@ -48,7 +48,7 @@ public class    Multiplexer {
 
 
         new Thread(() -> {
-            Topics.subscribeAll(bus);
+            Topics.subscribeAll(bus,ID);
 
             //TODO: Subscribe to command center info? I'm not fully sure what topic we're subscribing to here
             //Also maybe fire alarm?
@@ -90,6 +90,32 @@ public class    Multiplexer {
             message = bus.getMessage(topic);
         }
         return message;
+    }
+    private void handleMotorCommand(Message message){
+        int body = message.bodyOne();
+        int topic = message.topicInt();
+        //TODO add motor control logic
+        switch (body){
+            case 0:
+                break;
+            case 1:
+                break;
+            case 2:
+                break;
+
+        }
+    }
+    private void handleDoorCommand(Message message){
+        int[] body = new int[]{message.bodyOne(), message.bodyTwo(), message.bodyThree(), message.bodyFour()};
+        int topic = message.topicInt();
+        //TODO add door control logic
+        switch (body[0]){
+            case 0:
+                break;
+            case 1:
+                break;
+
+        }
     }
 
 
