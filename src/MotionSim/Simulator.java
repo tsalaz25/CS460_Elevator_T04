@@ -1,3 +1,6 @@
+import API.MotorAPI;
+import API.SensorAPI;
+import Devices.Sensor;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
@@ -5,251 +8,236 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.Scene;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import API.SensorAPI;
-import Devices.Sensor;
+import src.MotionSim.Devices.Motor;
 
-public class Simulator {
-    static final double FLOOR_HEIGHT = 4.0;
-    static final double CABIN_HEIGHT = 2;
-    static final double V_MAX = 2.0;
-    static final double A_MAX = 1.0;
-    static final double DT = 0.01;
-    static final double TOLERANCE = 0.005;
-    static final int NUMFLOORS = 10;
+import java.util.List;
 
+import static src.MotionSim.Devices.Motor.CABIN_HEIGHT;
+import static src.MotionSim.Devices.Motor.FLOOR_HEIGHT;
 
+public class Simulator extends Application {
 
-    static double halfCabin;
-    static double dAccel;
-    static double tAccel;
-    static double startPos;
-    static int startFloor;
-    static double endPos;
-    static int targetFloor;
-    static double distance;
-    static double dCruise;
-    static double tCruise;
-    static double totalTime;
-    static int direction;
-    static double topSensor;
-    static double bottomSensor;
-    static ElevatorModel model;
-    static Sensor[] sensors;
-    static SensorAPI sensorAPI;
+    public static final int NUM_FLOORS = 10;
+
+    private MotorAPI motorAPI;
+    private SensorAPI sensorAPI;
+    private int startFloor = 6;
+    private int targetFloor = 3;
+
+    private ElevatorModel model;
+    private Rectangle elevator;
+    private Rectangle[] sensorRects;
+    private double shaftHeight;
+    private double floorHeightPixels;
 
     public static void main(String[] args) {
-        startFloor = 10;
-        targetFloor = 1;
-        halfCabin = CABIN_HEIGHT / 2;
-        dAccel = V_MAX * V_MAX / (2 * A_MAX);
-        tAccel = V_MAX / A_MAX;
-        startPos = (startFloor -  1) * FLOOR_HEIGHT;
-        endPos = (targetFloor - 1) * FLOOR_HEIGHT;
-        distance = Math.abs(endPos - startPos);
-        dCruise = distance - 2 * dAccel;
-        tCruise = (dCruise > 0) ? dCruise / V_MAX : 0;
-        totalTime = 2 * tAccel + tCruise;
-
-        direction = (endPos > startPos) ? 1 : -1;
-
-        sensors = new Sensor[NUMFLOORS*2];
-
-        for(int i = 0; i<NUMFLOORS*2; i++){
-            double position = (i/2)*FLOOR_HEIGHT + (i%2)*CABIN_HEIGHT;
-            boolean isRoof = (i%2 == 1);
-            sensors[i] = new Sensor(position, i/2, isRoof);
-        }
-
-        sensorAPI = new SensorAPI(sensors,NUMFLOORS*2,TOLERANCE);
-
-        bottomSensor = endPos - halfCabin;
-        topSensor = endPos + halfCabin;
-
-        model = new ElevatorModel();
-        SimulatorGUI.setModel(model);
-
-        System.out.printf("%-8s %-10s %-10s %-10s %-10s\n", "time", "pos", "vel", "botom_triggered", "aligned");
-
-        SimulatorGUI.launch(SimulatorGUI.class, args);
+        launch(args);
     }
 
-    public static void runSimulation() {
-        double time = 0.0;
-        double pos = startPos;
-        double vel = 0.0;
-        String phase = "accel";
-        boolean triggeredDecel = false;
+    @Override
+    public void start(Stage primaryStage) {
+        motorAPI = new MotorAPI(NUM_FLOORS);
+        sensorAPI = new SensorAPI(NUM_FLOORS);
 
-        while (time <= totalTime + 1.0) {
-            if (phase.equals("accel") && Math.abs(vel) >= V_MAX) {
-                phase = "cruise";
+        Motor.Direction direction = (targetFloor > startFloor) ? Motor.Direction.UP : Motor.Direction.DOWN;
+        motorAPI.setDirection(direction);
+
+        double initialPos = (startFloor - 1) * FLOOR_HEIGHT;
+        System.out.printf("initial position : %f\n", initialPos);
+
+        motorAPI.setPosition(initialPos); // TODO: Decide if we always want the elevator to start at 0.0 ?? Then we could just set it during init
+
+        motorAPI.setMotion(Motor.Motion.START);
+
+
+        // GUI
+        model = new ElevatorModel();
+        model.setPosition(initialPos);
+
+        int shaftWidth = 60;
+        int screenHeight = 600;
+        int screenWidth = 200;
+        shaftHeight = screenHeight;
+        floorHeightPixels = shaftHeight / NUM_FLOORS;
+        double elevatorPixelHeight = (CABIN_HEIGHT / (NUM_FLOORS * FLOOR_HEIGHT)) * shaftHeight;
+
+        Pane root = new Pane();
+
+        Rectangle shaft = new Rectangle(screenWidth / 2.0 - shaftWidth / 2.0, 0, shaftWidth, screenHeight + elevatorPixelHeight/2);
+        shaft.setFill(Color.GREY);
+        root.getChildren().add(shaft);
+
+        elevator = new Rectangle(screenWidth / 2.0 - shaftWidth / 2.0, 0, shaftWidth, elevatorPixelHeight);
+        elevator.setFill(Color.BLUE);
+        root.getChildren().add(elevator);
+
+        Text elevatorLabel = new Text();
+        elevatorLabel.setFill(Color.WHITE);
+        elevatorLabel.setFont(Font.font(12));
+        root.getChildren().add(elevatorLabel);
+
+        sensorRects = new Rectangle[NUM_FLOORS * 2];
+
+        for (int i = 0; i < NUM_FLOORS; i++) {
+            double floorCenterMeters = i * FLOOR_HEIGHT;
+            double bottomSensorMeters = floorCenterMeters - (CABIN_HEIGHT / 2);
+            double topSensorMeters = floorCenterMeters + (CABIN_HEIGHT / 2);
+
+            double bottomSensorY = shaftHeight - (bottomSensorMeters / (NUM_FLOORS * FLOOR_HEIGHT)) * shaftHeight;
+            double topSensorY = shaftHeight - (topSensorMeters / (NUM_FLOORS * FLOOR_HEIGHT)) * shaftHeight;
+
+            double floorBaseY = (bottomSensorY + topSensorY) / 2;
+
+            Rectangle bottomSensor = new Rectangle(
+                    screenWidth / 2.0 - shaftWidth / 2.0,
+                    bottomSensorY,
+                    shaftWidth, 2);
+            bottomSensor.setFill(Color.YELLOW);
+            sensorRects[i * 2] = bottomSensor;
+            root.getChildren().add(bottomSensor);
+
+            Text bottomLabel = new Text("B" + (i + 1));
+            bottomLabel.setFont(Font.font(10));
+            bottomLabel.setX(screenWidth / 2.0 + shaftWidth / 2.0 + 5); // Right side of shaft
+            bottomLabel.setY(bottomSensorY + 4);  // Slight vertical offset
+            root.getChildren().add(bottomLabel);
+
+            Rectangle topSensor = new Rectangle(
+                    screenWidth / 2.0 - shaftWidth / 2.0,
+                    topSensorY,
+                    shaftWidth, 2);
+            topSensor.setFill(Color.YELLOW);
+            sensorRects[i * 2 + 1] = topSensor;
+            root.getChildren().add(topSensor);
+
+            Text topLabel = new Text("T" + (i + 1));
+            topLabel.setFont(Font.font(10));
+            topLabel.setX(screenWidth / 2.0 + shaftWidth / 2.0 + 5);
+            topLabel.setY(topSensorY + 4);
+            root.getChildren().add(topLabel);
+
+            double floorLineY = shaftHeight - floorCenterMeters / (NUM_FLOORS * FLOOR_HEIGHT) * shaftHeight;
+            Line floorLine = new Line(0, floorLineY, screenWidth, floorLineY);
+            floorLine.setStroke(Color.LIGHTGRAY);
+            floorLine.getStrokeDashArray().addAll(5d, 5d);
+            root.getChildren().add(floorLine);
+
+            Text floorHeightLabel = new Text((FLOOR_HEIGHT * i) + " m");
+            floorHeightLabel.setFont(Font.font(10));
+            floorHeightLabel.setX(10);
+            floorHeightLabel.setY(floorLineY + 4);
+            root.getChildren().add(floorHeightLabel);
+
+            Text floorLabel = new Text(String.valueOf(i + 1));
+            floorLabel.setFont(Font.font(14));
+            floorLabel.setX(10);
+            floorLabel.setY(floorBaseY - 5);
+
+            root.getChildren().add(floorLabel);
+
+
+
+        }
+
+        Text floorText = new Text();
+        floorText.setFont(Font.font(14));
+        floorText.setX(10);
+        floorText.setY(20);
+        root.getChildren().add(floorText);
+
+        model.positionProperty().addListener((obs, oldV, newV) -> {
+            double cabinCenter = newV.doubleValue();
+            double y = shaftHeight - (cabinCenter / (NUM_FLOORS * FLOOR_HEIGHT)) * shaftHeight - (elevator.getHeight() / 2.0);
+            elevator.setY(y);
+
+            // Update text label
+            elevatorLabel.setText(String.format("%.2f m", cabinCenter));
+            elevatorLabel.setX(elevator.getX() + 5);
+            elevatorLabel.setY(y + elevator.getHeight() / 2.0);
+
+            updateSensorColors();
+
+            // Update floor label text (don’t recreate it)
+            int floor = motorAPI.getFloor(cabinCenter);
+            floorText.setText("Floor " + floor);
+        });
+
+        Scene scene = new Scene(root, screenWidth, screenHeight+floorHeightPixels);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Elevator Simulator");
+        primaryStage.show();
+
+        Thread motorThread = new Thread(this::runMotorLoop);
+        motorThread.setDaemon(true);
+        motorThread.start();
+    }
+
+    private void runMotorLoop() {
+        while (true) {
+            double pos = motorAPI.getPosition();
+            Platform.runLater(() -> model.setPosition(pos));
+            sensorAPI.updateSensors(pos);
+
+//            System.out.printf("Cabin pos:  %.2f\n", pos);
+            if (sensorAPI.isFloorAligned(targetFloor)) {
+                System.out.printf("Aligned:  %b\n", sensorAPI.isFloorAligned(targetFloor));
+                break;
             }
 
-            if (phase.equals("cruise") && !triggeredDecel) {
-                double cabinBottom = pos + halfCabin - 1.2;
-                if ((direction == 1 && cabinBottom >= bottomSensor - TOLERANCE) || (direction == -1 && cabinBottom <= topSensor + TOLERANCE)) {
-                    System.out.printf("slowing down pos:%f endpos:%f\n",pos ,endPos);
-                    phase = "decel";
-                    triggeredDecel = true;
+
+//            Sensor sensor = sensorAPI.getActiveSensor();
+//            if (sensor.getFloor() == this.targetFloor) {
+//                // we need the sensor position?
+//                // so do we return the sensor or the position?
+//                // Probably sensor? but position is least amount of parsing
+//                //
+//
+//                double distance = pos - sensor.getPosition();
+//
+//                if (Math.abs(distance) <= 0.001) {
+//                    motorAPI.setMotion(Motor.Motion.STOP);
+//                }
+//            }
+            // TODO : Move this. Maybe split it up so that we check if the floor we want has an active sensor, and if so we start decelerating
+            List<Sensor> activeSensors = sensorAPI.pollActiveSensors();
+            for (Sensor sensor : activeSensors) {
+                if (sensor.getFloor() == this.targetFloor) {
+                    double sensorPos = sensor.getPosition();
+                    double distance = pos - sensorPos;
+
+                    if (Math.abs(distance) <= 0.001) {
+                        System.out.printf("sending stop at position %.2f\n", pos);
+                        motorAPI.setMotion(Motor.Motion.STOP);
+                        break;
+                    }
                 }
             }
-            
-            if (phase.equals("decel") && ((direction == 1 && pos >= endPos) || (direction == -1 && pos <= endPos))) {
-                phase = "stop";
-                pos = endPos;
-                vel = 0.0;
-            }
-
-            double accel = 0;
-            switch (phase) {
-                case "accel":
-                    accel = A_MAX * direction;
-                    break;
-                case "cruise":
-                    accel = 0;
-                    break;
-                case "decel":
-                    accel = -A_MAX * direction;
-                    break;
-                case "stop":
-                    accel = 0;
-                    vel = 0;
-                    break;
-            }
-
-            vel += accel * DT;
-            pos += vel * DT;
-
-            double finalPos = pos;
-            Platform.runLater(() -> model.setPosition(finalPos));
-
-            double cabinTop = pos + halfCabin;
-            double cabinBottom = pos - halfCabin;
-            sensorAPI.updateSensors(cabinTop, cabinBottom);
-
-            boolean bottomTriggered = Math.abs(cabinBottom - bottomSensor) <= TOLERANCE;
-            boolean aligned = Math.abs(pos - endPos) <= TOLERANCE;
-
-            System.out.printf("%-8.2f %-10.3f %-10.3f %-10s %-10s\n",
-                    time, pos, vel,
-                    bottomTriggered ? "Yes" : "No",
-                    aligned ? "Yes" : "No");
-
-            time += DT;
 
             try {
-                Thread.sleep((long) (DT * 1000));
+                Thread.sleep((long) (Motor.DT * 1000));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                break;
             }
         }
     }
+
+    private void updateSensorColors() {
+        List<Sensor> activeSensors = sensorAPI.pollActiveSensors();
+        List<Sensor> allSensors = sensorAPI.getAllSensors();
+        for (int i = 0; i < sensorRects.length; i++) {
+            sensorRects[i].setFill(activeSensors.contains(allSensors.get(i)) ? Color.GREEN : Color.YELLOW);
+        }
+    }
+
     public static class ElevatorModel {
         private final DoubleProperty position = new SimpleDoubleProperty(0);
         public DoubleProperty positionProperty() { return position; }
         public void setPosition(double p) { position.set(p); }
-    }
-
-    public static class SimulatorGUI extends Application {
-        private static ElevatorModel model;
-        private static Rectangle[] sensorRects;
-
-
-        public SimulatorGUI() {}
-        @Override
-        public void start(Stage primaryStage) throws Exception {
-            int elevatorWidth = 50;
-            int elevatorHeight = 20;
-            int gapHeight = 20;
-            int numFloors = 10;
-            int screenHeight = numFloors * elevatorHeight + (numFloors -1) * gapHeight;
-            int screenWidth = elevatorWidth * 10;
-
-            primaryStage.setTitle("MotionSim Simulator");
-            primaryStage.setResizable(true);
-            primaryStage.setWidth(screenWidth);
-            primaryStage.setHeight(screenHeight + 100);
-            Pane root = new Pane();
-
-
-            Rectangle elevatorShaft = new Rectangle(elevatorWidth, screenHeight);
-            elevatorShaft.setFill(Color.GREY);
-            elevatorShaft.setX(screenWidth / 2 - elevatorWidth / 2);
-            elevatorShaft.setY(0);
-            root.getChildren().add(elevatorShaft);
-
-            Rectangle elevator = new Rectangle(elevatorWidth, elevatorHeight/2);
-            elevator.setFill(Color.BLUE);
-            elevator.setX(screenWidth / 2 - elevatorWidth / 2);
-            elevator.setY(screenHeight - elevatorHeight/2);
-            root.getChildren().add(elevator);
-
-            Pane sensorPane = new Pane();
-            root.getChildren().add(sensorPane);
-
-            drawSensors(numFloors, elevatorWidth, screenWidth, screenHeight, gapHeight, elevatorHeight, sensorPane);
-
-            model.positionProperty().addListener((obs, oldV, newV) -> {
-                double ratio = elevatorHeight / Simulator.FLOOR_HEIGHT;
-                double offset = gapHeight;
-                elevator.setY(screenHeight - (2 * newV.doubleValue() * ratio) + elevatorHeight/4 - offset );
-                updateSensorColors();
-            });
-
-            Scene scene = new Scene(root, screenWidth, screenHeight);
-            primaryStage.setScene(scene);
-            primaryStage.show();
-
-            new Thread(Simulator::runSimulation).start();
-        }
-
-        private static void drawSensors(
-                int numFloors,
-                int elevatorWidth,
-                int screenWidth,
-                int screenHeight,
-                int gapHeight,
-                int elevatorHeight,
-                Pane sensorPane) {
-
-            sensorRects = new Rectangle[sensors.length];
-
-            for (int floor = 0; floor < numFloors; floor++) {
-                int bottomIndex = floor * 2;
-                int topIndex = bottomIndex + 1;
-
-                if (bottomIndex < sensors.length) {
-                    Rectangle bottom = new Rectangle(elevatorWidth, 1);
-                    bottom.setX(screenWidth / 2.0 - elevatorWidth / 2.0);
-                    bottom.setY(screenHeight - floor * (gapHeight + elevatorHeight) - elevatorHeight / 4.0);
-                    bottom.setFill(sensors[bottomIndex].getActive() ? Color.GREEN : Color.YELLOW);
-                    sensorRects[bottomIndex] = bottom;
-                    sensorPane.getChildren().add(bottom);
-                }
-
-                if (topIndex < sensors.length) {
-                    Rectangle top = new Rectangle(elevatorWidth, 1);
-                    top.setX(screenWidth / 2.0 - elevatorWidth / 2.0);
-                    top.setY(screenHeight - floor * (gapHeight + elevatorHeight) - 3 * (elevatorHeight / 4.0));
-                    top.setFill(sensors[topIndex].getActive() ? Color.GREEN : Color.YELLOW);
-                    sensorRects[topIndex] = top;
-                    sensorPane.getChildren().add(top);
-                }
-            }
-        }
-
-        private static void updateSensorColors() {
-            for (int i = 0; i < sensors.length; i++) {
-                if (sensorRects[i] != null) {
-                    sensorRects[i].setFill(sensors[i].getActive() ? Color.GREEN : Color.YELLOW);
-                }
-            }
-        }
-
-        public static void setModel(ElevatorModel m) {
-            model = m;
-        }
     }
 }
