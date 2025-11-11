@@ -1,6 +1,6 @@
-package API;
+package MotionSim.API;
 
-import Devices.Sensor;
+import MotionSim.Devices.Sensor;
 import java.util.ArrayList;
 import java.util.List;
 import static Devices.Motor.CABIN_HEIGHT;

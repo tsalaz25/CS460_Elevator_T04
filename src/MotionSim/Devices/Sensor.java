@@ -1,6 +1,6 @@
-package Devices;
+package MotionSim.Devices;
 
-import static src.MotionSim.Devices.Motor.CABIN_HEIGHT;
+import static Devices.Motor.CABIN_HEIGHT;
 
 public class Sensor {
     private final double TOLERANCE = 0.01; //0.1

@@ -2,11 +2,14 @@ package Multiplexer;
 import API.MotorAPI;
 import Devices.Motor.Motion;
 import Devices.Motor.Direction;
-import API.SensorAPI;
+import  MotionSim.API.SensorAPI;
 import CabinGUI.CabinPanel;
 import CabinGUI.DoorState;
 import LobbyGUI.LobbyPanel;
 import SoftwareBus.Bus.*;
+import javafx.application.Platform;
+
+import java.util.Arrays;
 
 
 public class    Multiplexer {
@@ -25,7 +28,13 @@ public class    Multiplexer {
     public int testFloor = 2;
     public int testDirection = 1;
     public int testDoor = 1;
-    
+
+    private SensorAPI sensor;
+    private MotorAPI motor;
+    private LobbyPanel lobby;
+    private CabinPanel cabin;
+
+
     /*
      * Constructs a Multiplexer and then begins polling for input from devices and from
      *
@@ -38,6 +47,10 @@ public class    Multiplexer {
         boolean aligned = lastAligned;
         DoorState door = lastDoor;
         boolean overloaded = lastOverloaded;
+        this.sensor = sensor;
+        this.motor = motor;
+        this.lobby = lobby;
+        this.cabin = cabin;
         for (int i = 0; i < NUM_FLOORS; i++) {
             activeButtons[i] = 0;
             activeCalls[2*i] = 0;
@@ -46,7 +59,7 @@ public class    Multiplexer {
 
         while(true){
 
-            //Device block 
+            //Device block
             //Check floor state
             floor = motor.getFloor(motor.getPosition());
             aligned = sensor.isFloorAligned(floor);
@@ -78,17 +91,17 @@ public class    Multiplexer {
                     Topics.publish(bus, Topics.FLOOR_SELECT, ID, new int[]{selection});
                 }
             }
- 
+
             //Check call button state
             int lobbyFloor = lobby.getCurrentFloor();
-            if(lobby.upRequested() && activeCalls[(lobbyFloor-1)*2] != 1){
-                activeCalls[(lobbyFloor-1)*2] = 1;
+            if(lobby.upRequested() && activeCalls[(lobbyFloor)*2] != 1){
+                activeCalls[(lobbyFloor)*2] = 1;
                 Topics.publish(bus, Topics.CAR_REQUEST, lobbyFloor, new int[]{2});
-            } 
-            if(lobby.downRequested() && activeCalls[((lobbyFloor-1)*2)+1] != 1){
-                activeCalls[((lobbyFloor-1)*2)+1] = 1;
+            }
+            if(lobby.downRequested() && activeCalls[((lobbyFloor)*2)+1] != 1){
+                activeCalls[((lobbyFloor)*2)+3] = 1;
                 Topics.publish(bus, Topics.CAR_REQUEST, lobbyFloor, new int[]{1});
-            } 
+            }
 
             //check overload sensor
             overloaded = cabin.overloaded();
@@ -135,7 +148,7 @@ public class    Multiplexer {
     }
 
 
-    /* 
+    /*
     //we're not using this currently since it seemed pointless without the while
     private Message pollDevices(Topic topic){
         Message message = null;
@@ -169,32 +182,42 @@ public class    Multiplexer {
         int[] body = new int[]{message.bodyOne(), message.bodyTwo(), message.bodyThree(), message.bodyFour()};
         int topic = message.topicInt();
         //This works but it assumes the door just opens instantly which might be okay.
-        switch (body[0]){
-            case 0:
-                cabin.setDoorState(DoorState.OPEN);
-                break;
-            case 1:
-                if(cabin.obstructed()){
-                    cabin.setDoorState(DoorState.OBSTRUCTED);
-                } else {
-                    cabin.setDoorState(DoorState.CLOSED);
-                }
-                break;
+        Platform.runLater(() -> {
+            switch (body[0]){
+                case 0:
+                    cabin.setDoorState(DoorState.OPEN);
+                    break;
+                case 1:
+                    if(cabin.obstructed()){
+                        cabin.setDoorState(DoorState.OBSTRUCTED);
+                    } else {
+                        cabin.setDoorState(DoorState.CLOSED);
+                    }
+                    break;
 
-        }
+            }
+        });
     }
 
     private void handleCabinReset(Message message){
         int[] body = new int[]{message.bodyOne(), message.bodyTwo(), message.bodyThree(), message.bodyFour()};
-        activeButtons[body[0]-1] = 0;
-        cabin.resetSelection();
+        activeButtons[body[0]] = 0;
+        Platform.runLater(() -> {
+            cabin.resetSelection();
+        });
+
     }
 
     private void handleLobbyReset(Message message){
         int[] body = new int[]{message.bodyOne(), message.bodyTwo(), message.bodyThree(), message.bodyFour()};
-        activeCalls[(body[0]-1)*2] = 0;
-        activeCalls[((body[0]-1)*2)+1] = 0;
-        cabin.resetSelection();
+        System.out.println("Before Reset: " + Arrays.toString(activeCalls));
+        activeCalls[(body[0])*2] = 0;
+        activeCalls[((body[0])*2)+1] = 0;
+        Platform.runLater(() -> {
+            cabin.resetSelection();
+        });
+        System.out.println("After Reset: " + Arrays.toString(activeCalls));
+
     }
 
     /*
@@ -203,18 +226,18 @@ public class    Multiplexer {
     private int DoorStateToInt(DoorState door){
         switch (door){
             case OPEN:
-            return 0;
+                return 0;
             case CLOSED:
-            return 1;
+                return 1;
             case OPENING:
-            return 2;
+                return 2;
             case CLOSING:
-            return 3;
+                return 3;
             case OBSTRUCTED:
-            return 4;
+                return 4;
             default:
-            return -1;
-            
+                return -1;
+
         }
     }
 

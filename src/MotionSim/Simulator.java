@@ -1,6 +1,8 @@
+package MotionSim;
+
 import API.MotorAPI;
-import API.SensorAPI;
-import Devices.Sensor;
+import MotionSim.API.SensorAPI;
+import MotionSim.Devices.Sensor;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
@@ -13,12 +15,13 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import src.MotionSim.Devices.Motor;
+import MotionSim.Devices.*;
 
 import java.util.List;
 
-import static src.MotionSim.Devices.Motor.CABIN_HEIGHT;
-import static src.MotionSim.Devices.Motor.FLOOR_HEIGHT;
+import static Devices.Motor.CABIN_HEIGHT;
+import static Devices.Motor.FLOOR_HEIGHT;
+
 
 public class Simulator extends Application {
 
@@ -44,7 +47,7 @@ public class Simulator extends Application {
         motorAPI = new MotorAPI(NUM_FLOORS);
         sensorAPI = new SensorAPI(NUM_FLOORS);
 
-        Motor.Direction direction = (targetFloor > startFloor) ? Motor.Direction.UP : Motor.Direction.DOWN;
+        Devices.Motor.Direction direction = (targetFloor > startFloor) ? Devices.Motor.Direction.UP : Devices.Motor.Direction.DOWN;
         motorAPI.setDirection(direction);
 
         double initialPos = (startFloor - 1) * FLOOR_HEIGHT;
@@ -52,7 +55,7 @@ public class Simulator extends Application {
 
         motorAPI.setPosition(initialPos); // TODO: Decide if we always want the elevator to start at 0.0 ?? Then we could just set it during init
 
-        motorAPI.setMotion(Motor.Motion.START);
+        motorAPI.setMotion(Devices.Motor.Motion.START);
 
 
         // GUI
@@ -212,14 +215,14 @@ public class Simulator extends Application {
 
                     if (Math.abs(distance) <= 0.001) {
                         System.out.printf("sending stop at position %.2f\n", pos);
-                        motorAPI.setMotion(Motor.Motion.STOP);
+                        motorAPI.setMotion(Devices.Motor.Motion.STOP);
                         break;
                     }
                 }
             }
 
             try {
-                Thread.sleep((long) (Motor.DT * 1000));
+                Thread.sleep((long) (Devices.Motor.DT * 1000));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

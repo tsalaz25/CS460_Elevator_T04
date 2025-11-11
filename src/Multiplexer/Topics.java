@@ -4,6 +4,8 @@ import SoftwareBus.Bus.Bus;
 import SoftwareBus.Bus.Message;
 import SoftwareBus.Bus.Topic;
 
+import java.util.Arrays;
+
 public class Topics {
     //Device outputs (Publish)
     //ints are per elevator and need the ID argument
@@ -35,5 +37,6 @@ public class Topics {
 
     public static void publish(Bus bus,int t,int ID,int[] body){
     bus.publish(new Message(new Topic(t,ID),body));
+    System.out.println("Message published on topic "+ t + " with subtopic " + ID + " and body " + Arrays.toString(body));
     }
 }
