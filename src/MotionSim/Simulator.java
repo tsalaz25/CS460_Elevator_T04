@@ -1,6 +1,6 @@
 package MotionSim;
 
-import API.MotorAPI;
+import MotionSim.API.MotorAPI;
 import MotionSim.API.SensorAPI;
 import MotionSim.Devices.Sensor;
 import javafx.application.Application;

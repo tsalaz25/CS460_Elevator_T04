@@ -1,6 +1,6 @@
 package Multiplexer;
 
-import API.MotorAPI;
+import MotionSim.API.MotorAPI;
 import Devices.Motor.Motion;
 import Devices.Motor.Direction;
 import MotionSim.API.SensorAPI;
@@ -22,34 +22,22 @@ import javafx.util.Duration;
 
 import java.util.Scanner;
 
+
+
 public class Test extends Application {
+    public static final int NUM_FLOORS = 10;
+
+
     public static void main(String[] args) {
             launch(args);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
 
 
     @Override
     public void start(Stage primaryStage) throws Exception {
         Bus bus = new Bus();
-        MotorAPI motor = new MotorAPI(10);
-        SensorAPI sensor = new SensorAPI(10);
+        MotorAPI motor = new MotorAPI(NUM_FLOORS);
+        SensorAPI sensor = new SensorAPI(NUM_FLOORS);
         LobbyPanel lobby = new LobbyPanel();
         Scene scene = new Scene(lobby, 380, 320);
         primaryStage.setTitle("Lobby GUI");
@@ -116,9 +104,14 @@ public class Test extends Application {
             System.out.println("Press ENTER to reset");
             scanner.nextLine();
             bus.publish(new Message(cabinReset,new int[]{0,-1,-1,-1}));
+
             System.out.println("Press ENTER to move motor up");
+            scanner.nextLine();
             bus.publish(new Message(motorCommand,new int[]{1}));
 
+            System.out.println("Press ENTER to stop motor");
+            scanner.nextLine();
+            bus.publish(new Message(motorCommand,new int[]{0}));
         });
         simThread.setDaemon(true);
         simThread.start();

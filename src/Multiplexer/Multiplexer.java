@@ -1,5 +1,5 @@
 package Multiplexer;
-import API.MotorAPI;
+import MotionSim.API.MotorAPI;
 import Devices.Motor.Motion;
 import Devices.Motor.Direction;
 import  MotionSim.API.SensorAPI;
@@ -66,12 +66,7 @@ public class    Multiplexer {
             if (floor != lastFloor || aligned != lastAligned){
                 lastFloor = floor;
                 lastAligned = aligned;
-                int alignedInt;
-                if(aligned){
-                    alignedInt = 1;
-                } else {
-                    alignedInt = 0;
-                }
+                int alignedInt = aligned ? 1 : 0;
                 Topics.publish(bus, Topics.ELEVATOR_FLOOR, ID, new int[]{floor,alignedInt});
             }
 
@@ -107,37 +102,28 @@ public class    Multiplexer {
             overloaded = cabin.overloaded();
             if(overloaded != lastOverloaded){
                 lastOverloaded = overloaded;
-                int overloadedInt;
-                if(overloaded){
-                    overloadedInt = 1;
-                } else {
-                    overloadedInt = 0;
-                }
+                int overloadedInt = overloaded ? 1 : 0;
                 Topics.publish(bus, 4, ID, new int[]{overloadedInt});
             }
 
             //Bus block
 
             //Read motor commands
-            Message command = null;
-            command = bus.getMessage(new Topic(Topics.MOTOR_COMMAND,ID));
+            Message command = bus.getMessage(new Topic(Topics.MOTOR_COMMAND,ID));
             if(command != null){
                 handleMotorCommand(command);
             }
 
-            command = null;
             command = bus.getMessage(new Topic(Topics.DOOR_COMMAND,ID));
             if(command != null){
                 handleDoorCommand(command);
             }
 
-            command = null;
             command = bus.getMessage(new Topic(Topics.CABIN_BUTTON_RESET,ID));
             if(command != null){
                 handleCabinReset(command);
             }
 
-            command = null;
             command = bus.getMessage(new Topic(Topics.CALL_BUTTON_RESET,ID));
             if(command != null){
                 handleLobbyReset(command);
@@ -146,18 +132,6 @@ public class    Multiplexer {
 
         }
     }
-
-
-    /*
-    //we're not using this currently since it seemed pointless without the while
-    private Message pollDevices(Topic topic){
-        Message message = null;
-        while (message == null){
-            message = bus.getMessage(topic);
-        }
-        return message;
-    }
-    */
 
     private void handleMotorCommand(Message message){
         int body = message.bodyOne();
@@ -181,7 +155,8 @@ public class    Multiplexer {
     private void handleDoorCommand(Message message){
         int[] body = new int[]{message.bodyOne(), message.bodyTwo(), message.bodyThree(), message.bodyFour()};
         int topic = message.topicInt();
-        //This works but it assumes the door just opens instantly which might be okay.
+        // TODO : Door must implement a opening and closing
+        // This works but it assumes the door just opens instantly
         Platform.runLater(() -> {
             switch (body[0]){
                 case 0:

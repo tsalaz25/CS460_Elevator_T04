@@ -1,4 +1,4 @@
-package API;
+package MotionSim.API;
 
 import Devices.Motor;
 import Devices.Motor.Motion;
