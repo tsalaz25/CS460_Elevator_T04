@@ -1,4 +1,4 @@
-package src.MotionSim.Devices;
+package Devices;
 
 public final class Motor {
 

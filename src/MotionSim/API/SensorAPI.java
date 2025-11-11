@@ -3,8 +3,8 @@ package API;
 import Devices.Sensor;
 import java.util.ArrayList;
 import java.util.List;
-import static src.MotionSim.Devices.Motor.CABIN_HEIGHT;
-import static src.MotionSim.Devices.Motor.FLOOR_HEIGHT;
+import static Devices.Motor.CABIN_HEIGHT;
+import static Devices.Motor.FLOOR_HEIGHT;
 
 public class SensorAPI {
     private final List<Sensor> sensors = new ArrayList<>();
