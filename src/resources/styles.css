@@ -1,0 +1,7 @@
+/* frame.css */
+.root {
+    -fx-border-image-source: url("frame.jpg");
+    -fx-border-image-slice: 20 20 20 20 fill; /* adjust for your frame thickness */
+    -fx-border-image-width: 20;
+    -fx-border-image-repeat: stretch;
+}

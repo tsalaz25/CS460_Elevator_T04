@@ -1,8 +1,8 @@
-package MotionSim.API;
+package API;
 
-import Devices.Motor;
-import Devices.Motor.Motion;
-import Devices.Motor.Direction;
+import src.MotionSim.Devices.Motor;
+import src.MotionSim.Devices.Motor.Motion;
+import src.MotionSim.Devices.Motor.Direction;
 
 public class MotorAPI {
     Motor motor;

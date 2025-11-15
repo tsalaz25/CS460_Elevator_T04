@@ -18,5 +18,4 @@ public class Topics {
      * The field b1 is x when the timer has x seconds remaining
      */
     public static final Topic TIMER_STATUS = new Topic(2, 1);
-
 }

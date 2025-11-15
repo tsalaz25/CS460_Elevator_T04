@@ -1,10 +1,10 @@
-package MotionSim.API;
+package API;
 
-import MotionSim.Devices.Sensor;
+import Devices.Sensor;
 import java.util.ArrayList;
 import java.util.List;
-import static Devices.Motor.CABIN_HEIGHT;
-import static Devices.Motor.FLOOR_HEIGHT;
+import static src.MotionSim.Devices.Motor.CABIN_HEIGHT;
+import static src.MotionSim.Devices.Motor.FLOOR_HEIGHT;
 
 public class SensorAPI {
     private final List<Sensor> sensors = new ArrayList<>();
@@ -14,7 +14,7 @@ public class SensorAPI {
             int floor = (int) (i * FLOOR_HEIGHT);
             double floorSensorPos = floor - CABIN_HEIGHT / 2;
             double ceilingSensorPos = floor + CABIN_HEIGHT / 2;
-//            System.out.printf("creating floor %d sensor at positions %f %f\n", i+1, floorSensorPos, ceilingSensorPos);
+            System.out.printf("creating floor %d sensor at positions %f %f\n", i+1, floorSensorPos, ceilingSensorPos);
 
             sensors.add(new Sensor(floorSensorPos, i + 1, false));
             sensors.add(new Sensor(ceilingSensorPos, i + 1, true));
