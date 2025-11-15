@@ -1,3 +1,13 @@
 package Wiring;
-public class Topics {
+
+public enum Topics {
+    UI_HALL_CALL_UP,
+    UI_HALL_CALL_DOWN,
+    UI_CABIN_SELECT,
+    CTRL_CMD_MOVE_TO,
+    CTRL_CMD_DOOR_OPEN,
+    CTRL_CMD_DOOR_CLOSE,
+    SIM_FLOOR_TICK,
+    SIM_ARRIVED,
+    CTRL_STATE_UPDATE
 }
