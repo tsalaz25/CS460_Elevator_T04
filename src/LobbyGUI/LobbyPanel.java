@@ -11,28 +11,93 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
+/**
+ * Lobby panel with:
+ * - Target floor dropdown (0..10)
+ * - Red-on-black floor display
+ * - Up/Down buttons that light when pressed
+ *
+ * Integration mode (systemMode=true):
+ *   - Does NOT self-move; just fires callbacks on button presses
+ *   - Controller should call setCurrentFloor/setTargetFloor/resetUp/Down
+ *
+ * Standalone demo mode (systemMode=false):
+ *   - A small Timeline simulates travel one floor per tick
+ */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
-    private boolean up = false;
-    private boolean down = false;
+    // ----- Integration hooks -----
+    private Runnable onUpPressed;
+    private Runnable onDownPressed;
+    private boolean systemMode = true;  // true => no internal travel; UI is "dumb"
+
+    // ----- UI state -----
+    private boolean upLamp = false;
+    private boolean downLamp = false;
     private int currentFloor = 0;
     private int targetFloor = 0;
     private boolean moving = false;
 
+    // ----- Controls -----
     private final Button upBtn = new Button("▲");
     private final Button downBtn = new Button("▼");
     private final ComboBox<Integer> floorDropdown = new ComboBox<>();
+    private final Label display = new Label("0");
     private final Label title = new Label("Lobby Panel");
-    private final Label display = new Label("0"); // red-on-black counter
 
-    private Timeline travel;
+    // ----- Standalone demo travel -----
+    private final Timeline travel = new Timeline(new KeyFrame(Duration.millis(700), e -> stepTowardTarget()));
 
     public LobbyPanel() {
-        // background
+        buildUI();
+        wireHandlers();
+        travel.setCycleCount(Timeline.INDEFINITE);
+        refreshInteractivity();
+        applyStyles();
+    }
+
+    // ============================================================
+    // Public integration helpers
+    // ============================================================
+    public void setOnUpPressed(Runnable r)   { this.onUpPressed = r; }
+    public void setOnDownPressed(Runnable r) { this.onDownPressed = r; }
+    public void setSystemMode(boolean v)     { this.systemMode = v; }
+
+    // ============================================================
+    // LobbyPanelAPI
+    // ============================================================
+    @Override public boolean upRequested()   { return upLamp; }
+    @Override public boolean downRequested() { return downLamp; }
+
+    @Override public void resetUpRequest()   { upLamp = false; applyStyles(); refreshInteractivity(); }
+    @Override public void resetDownRequest() { downLamp = false; applyStyles(); refreshInteractivity(); }
+
+    @Override public void setCurrentFloor(int f) {
+        currentFloor = clamp(f, 0, 10);
+        display.setText(Integer.toString(currentFloor));
+        refreshInteractivity();
+    }
+    @Override public int getCurrentFloor() { return currentFloor; }
+
+    @Override public void setTargetFloor(int f) {
+        targetFloor = clamp(f, 0, 10);
+        // keep dropdown in sync if user didn't set it directly
+        if (floorDropdown.getValue() == null || floorDropdown.getValue() != targetFloor) {
+            floorDropdown.getSelectionModel().select(targetFloor);
+        }
+        refreshInteractivity();
+    }
+    @Override public int getTargetFloor() { return targetFloor; }
+
+    @Override public boolean isMoving() { return moving; }
+
+    // ============================================================
+    // UI setup
+    // ============================================================
+    private void buildUI() {
         setPadding(new Insets(12));
         setBackground(new Background(new BackgroundFill(Color.web("#f5f7fc"), CornerRadii.EMPTY, Insets.EMPTY)));
 
-        // card
         VBox card = new VBox(12);
         card.setPadding(new Insets(14));
         card.setAlignment(Pos.TOP_CENTER);
@@ -43,104 +108,87 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        // 7-seg style display (red numbers on black)
         display.setMinWidth(120);
         display.setAlignment(Pos.CENTER);
-        display.setStyle("""
-                + "-fx-background-color:black;"
-                + "-fx-text-fill:#ff4545;"
-                + "-fx-font-family:'Consolas', 'Courier New', monospace;"
-                + "-fx-font-size:40;"
-                + "-fx-padding:8 14;"
-                + "-fx-background-radius:8;"
-                + "-fx-border-color:#111827; -fx-border-radius:8; -fx-border-width:1;"
-        + """);
+        display.setStyle(
+                "-fx-background-color:black;" +
+                        "-fx-text-fill:#ff4545;" +
+                        "-fx-font-family:'Consolas','Courier New',monospace;" +
+                        "-fx-font-size:40;" +
+                        "-fx-padding:8 14;" +
+                        "-fx-background-radius:8;" +
+                        "-fx-border-color:#111827; -fx-border-radius:8; -fx-border-width:1;"
+        );
 
-        // dropdown 0..10
         for (int i = 0; i <= 10; i++) floorDropdown.getItems().add(i);
         floorDropdown.getSelectionModel().select(0);
         floorDropdown.setPrefWidth(160);
-        floorDropdown.setOnAction(e -> {
-            Integer v = floorDropdown.getValue();
-            if (v != null) {
-                setTargetFloor(v);
-            }
-            refreshInteractivity();
-        });
 
-        HBox selectorRow = new HBox(10, new Label("Select current floor:"), floorDropdown);
+        HBox selectorRow = new HBox(10, new Label("Select target:"), floorDropdown);
         selectorRow.setAlignment(Pos.CENTER);
 
-        // buttons
         upBtn.setPrefWidth(90);
         downBtn.setPrefWidth(90);
-        upBtn.setStyle(baseButtonStyle());
-        downBtn.setStyle(baseButtonStyle());
-
-        upBtn.setOnAction(e -> onCallPressed(true));
-        downBtn.setOnAction(e -> onCallPressed(false));
 
         HBox btnRow = new HBox(12, upBtn, downBtn);
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
 
-        // assemble
         card.getChildren().addAll(title, display, selectorRow, btnRow);
         setCenter(card);
-
-        // timeline setup
-        travel = new Timeline(new KeyFrame(Duration.millis(700), e -> stepTowardTarget()));
-        travel.setCycleCount(Timeline.INDEFINITE);
-
-        applyStyles();
-        refreshInteractivity();
     }
 
-    private String baseButtonStyle() {
-        return "-fx-font-size:20; -fx-font-weight:800; -fx-padding:10 12;"
-             + "-fx-background-radius:12; -fx-border-radius:12; -fx-border-color:#d7deea; -fx-border-width:1;";
+    private void wireHandlers() {
+        floorDropdown.setOnAction(e -> {
+            Integer v = floorDropdown.getValue();
+            if (v != null) {
+                targetFloor = clamp(v, 0, 10);
+            }
+            refreshInteractivity();
+        });
+
+        upBtn.setOnAction(e -> {
+            // light the lamp
+            upLamp = true; downLamp = false;
+            applyStyles();
+
+            if (systemMode) {
+                if (onUpPressed != null) onUpPressed.run();
+            } else {
+                // standalone demo travel
+                triggerDemoTravel();
+            }
+            refreshInteractivity();
+        });
+
+        downBtn.setOnAction(e -> {
+            downLamp = true; upLamp = false;
+            applyStyles();
+
+            if (systemMode) {
+                if (onDownPressed != null) onDownPressed.run();
+            } else {
+                triggerDemoTravel();
+            }
+            refreshInteractivity();
+        });
     }
 
-    private void applyStyles() {
-        // Up style
-        if (up) {
-            upBtn.setStyle(baseButtonStyle() + "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;");
-        } else {
-            upBtn.setStyle(baseButtonStyle() + "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;");
-        }
-
-        // Down style
-        if (down) {
-            downBtn.setStyle(baseButtonStyle() + "; -fx-background-color:#a7f3d0; -fx-text-fill:#1b2a4e;");
-        } else {
-            downBtn.setStyle(baseButtonStyle() + "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;");
-        }
-
-        // display text
-        display.setText(Integer.toString(currentFloor));
-    }
-
-    private void onCallPressed(boolean isUp) {
-        // Do nothing if already at target
+    // ============================================================
+    // Standalone demo travel (disabled in system mode)
+    // ============================================================
+    private void triggerDemoTravel() {
         if (currentFloor == targetFloor) {
+            // no-op arrival behavior
+            upLamp = false; downLamp = false;
+            applyStyles();
             refreshInteractivity();
             return;
         }
-
-        if (isUp) {
-            up = true;
-        } else {
-            down = true;
-        }
-        applyStyles();
-
-        // Begin travel if not already moving
         if (!moving) {
             moving = true;
             travel.playFromStart();
         }
-
-        refreshInteractivity();
     }
 
     private void stepTowardTarget() {
@@ -148,77 +196,46 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
             finishTravel();
             return;
         }
-        if (currentFloor < targetFloor) {
-            currentFloor++;
-        } else {
-            currentFloor--;
-        }
-        applyStyles();
-
-        if (currentFloor == targetFloor) {
-            finishTravel();
-        }
+        currentFloor += (targetFloor > currentFloor) ? 1 : -1;
+        display.setText(Integer.toString(currentFloor));
+        if (currentFloor == targetFloor) finishTravel();
     }
 
     private void finishTravel() {
         moving = false;
         travel.stop();
-        // Dim buttons on arrival
-        up = false;
-        down = false;
+        upLamp = false; downLamp = false; // dim both on arrival
         applyStyles();
         refreshInteractivity();
+    }
+
+    // ============================================================
+    // Visuals & interactivity
+    // ============================================================
+    private String baseButtonStyle() {
+        return "-fx-font-size:20; -fx-font-weight:800; -fx-padding:10 12;" +
+                "-fx-background-radius:12; -fx-border-radius:12; -fx-border-color:#d7deea; -fx-border-width:1;";
+    }
+
+    private void applyStyles() {
+        upBtn.setStyle(baseButtonStyle() +
+                (upLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
+                        : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
+        downBtn.setStyle(baseButtonStyle() +
+                (downLamp ? "; -fx-background-color:#a7f3d0; -fx-text-fill:#1b2a4e;"
+                        : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
+        display.setText(Integer.toString(currentFloor));
     }
 
     private void refreshInteractivity() {
         boolean atTarget = (currentFloor == targetFloor);
-        // Buttons are disabled if already at floor, or while moving
-        upBtn.setDisable(atTarget || moving);
-        downBtn.setDisable(atTarget || moving);
+        upBtn.setDisable(moving || atTarget);
+        downBtn.setDisable(moving || atTarget);
         floorDropdown.setDisable(moving);
     }
 
-    // ---- API ----
-    @Override
-    public boolean upRequested() { return up; }
-
-    @Override
-    public boolean downRequested() { return down; }
-
-    @Override
-    public void resetUpRequest() { up = false; applyStyles(); refreshInteractivity(); }
-
-    @Override
-    public void resetDownRequest() { down = false; applyStyles(); refreshInteractivity(); }
-
-    @Override
-    public void setCurrentFloor(int f) {
-        currentFloor = clamp(f, 0, 10);
-        applyStyles();
-        refreshInteractivity();
-    }
-
-    @Override
-    public int getCurrentFloor() { return currentFloor; }
-
-    @Override
-    public void setTargetFloor(int f) {
-        targetFloor = clamp(f, 0, 10);
-        if (floorDropdown.getValue() == null || floorDropdown.getValue() != targetFloor) {
-            floorDropdown.getSelectionModel().select(targetFloor);
-        }
-        refreshInteractivity();
-    }
-
-    @Override
-    public int getTargetFloor() { return targetFloor; }
-
-    @Override
-    public boolean isMoving() { return moving; }
-
     private int clamp(int v, int lo, int hi) {
-        if (v < lo) return lo;
-        if (v > hi) return hi;
-        return v;
+        return Math.max(lo, Math.min(hi, v));
     }
 }
+

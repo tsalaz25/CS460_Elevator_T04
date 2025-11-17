@@ -1,49 +1,121 @@
 package CabinGUI;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.control.*;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle;
 
-import java.io.File;
+import java.util.function.IntConsumer;
 
+/**
+ * Cabin panel with:
+ * - Red-on-black floor display
+ * - Direction indicator
+ * - Door state indicator
+ * - Optional grid of floor buttons that emit a selection callback
+ *
+ * This panel is "dumb": the controller sets floor/direction/door state;
+ * when the user selects a floor, we invoke onFloorSelected.
+ */
 public class CabinPanel extends BorderPane implements CabinPanelAPI {
 
-    // --- UI widgets ---
-    private ImageView previewView;          // open/closed image
-    private final Label doorBadge = new Label("DOORS CLOSED");
-    private final Rectangle doorLamp = new Rectangle(12, 12);
-    private final ComboBox<Integer> floorDropdown = new ComboBox<>();
-    private final Button clearSel = new Button("Reset");
-    private final ToggleButton emergency = new ToggleButton("EMERGENCY");
-    private final Label floorLbl = new Label("1");
-    private final Label dirLbl   = new Label("—");
-    private final Label banner   = new Label(""); // small status line
+    // ----- Integration hook -----
+    private IntConsumer onFloorSelected;
 
-    // --- API state ---
-    private boolean hasSel = false;
-    private int sel = 1;
-    private DoorState door = DoorState.CLOSED;
-    private boolean overload = false;
-    private boolean obstacle = false;
+    // ----- UI state -----
+    private int currentFloor = 0;
+    private String direction = "IDLE";
+    private DoorState doorState = DoorState.CLOSED;
 
-    // --- images ---
-    private Image imgOpen;
-    private Image imgClosed;
+    // ----- Controls -----
+    private final Label title = new Label("Cabin Panel");
+    private final Label display = new Label("0");
+    private final Label dirBadge = new Label("IDLE");
+    private final Label doorBadge = new Label("CLOSED");
+    private final GridPane floorGrid = new GridPane();
 
     public CabinPanel() {
-        imgOpen   = tryLoad("src/CabinGUI/img/elevator-open.png",   "src/ui/img/elevator-open.png");
-        imgClosed = tryLoad("src/CabinGUI/img/elevator-closed.png", "src/ui/img/elevator-closed.png");
+        buildUI();
+        buildFloorButtons(0, 10);
+        refreshBadges();
+    }
 
-        // page bg
+    // ============================================================
+    // Public integration helper
+    // ============================================================
+    public void setOnFloorSelected(IntConsumer c) { this.onFloorSelected = c; }
+
+    // ============================================================
+    // CabinPanelAPI
+    // ============================================================
+    @Override public void setCurrentFloor(int f) {
+        currentFloor = clamp(f, 0, 10);
+        display.setText(Integer.toString(currentFloor));
+    }
+
+    @Override public void setDirection(String s) {
+        if (s == null) s = "IDLE";
+        direction = s.toUpperCase();
+        refreshBadges();
+    }
+
+    @Override
+    public boolean hasSelection() {
+        return false;
+    }
+    @Override
+    public int selectedFloor() {
+        return 0;
+    }
+    @Override
+    public void resetSelection() {
+
+    }
+    @Override
+    public boolean emergency() {
+        return false;
+    }
+    @Override
+    public void resetEmergency() {
+
+    }
+    @Override
+    public DoorState doorState() {
+        return null;
+    }
+    @Override public void setDoorState(DoorState d) {
+        if (d == null) d = DoorState.CLOSED;
+        doorState = d;
+        refreshBadges();
+    }
+    @Override
+    public boolean overloaded() {
+        return false;
+    }
+
+    @Override public void setOverloaded(boolean b) {
+        // optional: style doorBadge or add another badge if you track overload
+        // no-op for now
+    }
+    @Override
+    public boolean obstructed() {
+        return false;
+    }
+
+    @Override public void setObstructed(boolean b) {
+        // optional: style doorBadge or add another badge if you track obstruction
+        // no-op for now
+    }
+
+    // ============================================================
+    // UI setup
+    // ============================================================
+    private void buildUI() {
         setPadding(new Insets(12));
         setBackground(new Background(new BackgroundFill(Color.web("#f5f7fc"), CornerRadii.EMPTY, Insets.EMPTY)));
 
-        // ----- single "card" -----
         VBox card = new VBox(12);
         card.setPadding(new Insets(14));
         card.setAlignment(Pos.TOP_CENTER);
@@ -52,116 +124,76 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
                 BorderStrokeStyle.SOLID, new CornerRadii(16), new BorderWidths(1))));
         card.setStyle(card.getStyle() + "; -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0.25, 0, 6);");
 
-        Label title = new Label("Cabin Panel");
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        // framed preview
-        StackPane preview = new StackPane();
-        preview.setMaxSize(330, 390);
-        Region frame = new Region();
-        frame.setPrefSize(310, 370);
-        frame.setStyle("-fx-background-color:white; -fx-background-radius:14; -fx-border-color:#d7deea; -fx-border-radius:14;");
-        Node inside;
-        if (imgOpen != null && imgClosed != null) {
-            previewView = new ImageView();
-            previewView.setFitWidth(300); previewView.setFitHeight(360);
-            previewView.setPreserveRatio(true); previewView.setSmooth(true);
-            updatePreviewImage();
-            inside = previewView;
-        } else {
-            Label ph = new Label("Add images:\nsrc/CabinGUI/img/\n  elevator-open.png\n  elevator-closed.png");
-            ph.setStyle("-fx-text-fill:#6b7280; -fx-font-size:12; -fx-alignment:center;");
-            inside = ph;
-        }
-        preview.getChildren().addAll(frame, inside);
-        preview.setStyle("-fx-background-color:#f8fafc; -fx-background-radius:14; -fx-padding:8; "
-                + "-fx-effect: dropshadow(gaussian, rgba(15,23,42,0.10), 12, 0.2, 0, 4);");
+        display.setMinWidth(120);
+        display.setAlignment(Pos.CENTER);
+        display.setStyle(
+                "-fx-background-color:black;" +
+                        "-fx-text-fill:#ff4545;" +
+                        "-fx-font-family:'Consolas','Courier New',monospace;" +
+                        "-fx-font-size:40;" +
+                        "-fx-padding:8 14;" +
+                        "-fx-background-radius:8;" +
+                        "-fx-border-color:#111827; -fx-border-radius:8; -fx-border-width:1;"
+        );
 
-        // door status row
-        doorLamp.setArcWidth(999); doorLamp.setArcHeight(999);
-        doorLamp.setStroke(Color.web("#0f172a"));
-        HBox doorRow = new HBox(8, doorLamp, doorBadge);
-        doorRow.setAlignment(Pos.CENTER_LEFT);
+        HBox badgeRow = new HBox(10, dirBadge, doorBadge);
+        badgeRow.setAlignment(Pos.CENTER);
 
-        // small chips row (floor/direction)
-        Label cap1 = new Label("FLOOR");      cap1.setStyle("-fx-text-fill:#6b7280; -fx-font-size:11; -fx-font-weight:700;");
-        floorLbl.setStyle("-fx-background-color:#eef2ff; -fx-background-radius:10; -fx-padding:4 8; -fx-font-weight:700; -fx-text-fill:#1b2a4e;");
-        Label cap2 = new Label("DIRECTION");  cap2.setStyle("-fx-text-fill:#6b7280; -fx-font-size:11; -fx-font-weight:700;");
-        dirLbl.setStyle("-fx-background-color:#eef2ff; -fx-background-radius:10; -fx-padding:4 8; -fx-font-weight:700; -fx-text-fill:#1b2a4e;");
-        HBox chips = new HBox(10, cap1, floorLbl, cap2, dirLbl);
-        chips.setAlignment(Pos.CENTER_LEFT);
+        floorGrid.setHgap(8);
+        floorGrid.setVgap(8);
+        floorGrid.setAlignment(Pos.CENTER);
 
-        // destination row
-        for (int i = 1; i <= 10; i++) floorDropdown.getItems().add(i);
-        floorDropdown.setPrefWidth(140);
-        floorDropdown.setPromptText("Select floor");
-        floorDropdown.setOnAction(e -> {
-            Integer f = floorDropdown.getValue();
-            if (f != null) { sel = f; hasSel = true; banner.setText("Selected: " + f); }
-        });
-        clearSel.setOnAction(e -> resetSelection());
-        clearSel.setStyle("-fx-background-color:#f3f4f6; -fx-text-fill:#1f2937; -fx-font-weight:700;"
-                + "-fx-background-radius:10; -fx-padding:6 12; -fx-border-color:#e5e7eb; -fx-border-radius:10;");
-        HBox dest = new HBox(10, new Label("Destination:"), floorDropdown, clearSel);
-        ((Label)dest.getChildren().get(0)).setStyle("-fx-font-weight:800; -fx-text-fill:#16233f;");
-        dest.setAlignment(Pos.CENTER_LEFT);
-
-        // emergency button
-        emergency.setStyle("-fx-background-color:#fef2f2; -fx-text-fill:#9f1239; -fx-font-weight:800;"
-                + "-fx-background-radius:999; -fx-padding:6 14; -fx-border-color:#fecaca; -fx-border-radius:999;");
-        emergency.setOnAction(e -> banner.setText(emergency.isSelected() ? "HELP REQUESTED" : ""));
-
-        // hint/status
-        banner.setStyle("-fx-text-fill:#6b7280; -fx-font-size:11;");
-
-        // assemble
-        card.getChildren().addAll(title, preview, doorRow, chips, dest, emergency, banner);
+        card.getChildren().addAll(title, display, badgeRow, floorGrid);
         setCenter(card);
-
-        applyDoorVisuals(); // set lamp + badge + image
     }
 
-    // ---- helpers ----
-    private Image tryLoad(String... paths) {
-        for (String p : paths) {
-            try {
-                File f = new File(p);
-                if (f.exists()) return new Image(f.toURI().toString(), 300, 360, true, true, true);
-            } catch (Exception ignore) {}
+    private void buildFloorButtons(int min, int max) {
+        int cols = 4;
+        int n = 0;
+        for (int f = min; f <= max; f++) {
+            Button b = new Button(Integer.toString(f));
+            b.setPrefWidth(56);
+            int finalF = f;
+            b.setOnAction(e -> {
+                if (onFloorSelected != null) onFloorSelected.accept(finalF);
+            });
+            b.setStyle("-fx-font-weight:700; -fx-background-radius:10;");
+            floorGrid.add(b, n % cols, n / cols);
+            n++;
         }
-        return null;
     }
 
-    private void updatePreviewImage() {
-        if (previewView == null) return;
-        if (door == DoorState.OPEN && imgOpen != null) previewView.setImage(imgOpen);
-        else if (imgClosed != null) previewView.setImage(imgClosed);
+    private void refreshBadges() {
+        dirBadge.setText(direction);
+        String dirStyle =
+                "UP".equals(direction)   ? "-fx-background-color:#d1fae5; -fx-text-fill:#065f46;"
+                        : "DOWN".equals(direction) ? "-fx-background-color:#fee2e2; -fx-text-fill:#991b1b;"
+                        : "-fx-background-color:#e5e7eb; -fx-text-fill:#111827;";
+        styleBadge(dirBadge, dirStyle);
+
+        doorBadge.setText(doorState.name());
+        String doorStyle =
+                switch (doorState) {
+                    case OPEN     -> "-fx-background-color:#e0f2fe; -fx-text-fill:#075985;";
+                    case OPENING  -> "-fx-background-color:#cffafe; -fx-text-fill:#155e75;";
+                    case CLOSING  -> "-fx-background-color:#fef9c3; -fx-text-fill:#854d0e;";
+                    case OBSTRUCTED -> "-fx-background-color:#fee2e2; -fx-text-fill:#991b1b;";
+                    case CLOSED   -> "-fx-background-color:#e5e7eb; -fx-text-fill:#111827;";
+                };
+        styleBadge(doorBadge, doorStyle);
     }
 
-    private void applyDoorVisuals() {
-        switch (door) {
-            case OPEN -> doorLamp.setFill(Color.LIMEGREEN);
-            case CLOSED -> doorLamp.setFill(Color.RED);
-            default -> doorLamp.setFill(Color.GOLD);
-        }
-        doorBadge.setText(door == DoorState.OPEN ? "DOORS OPEN" : "DOORS CLOSED");
-        String bg = (door == DoorState.OPEN) ? "#40a652" : "#d33f3f";
-        doorBadge.setStyle("-fx-background-radius:999; -fx-padding:4 12; -fx-text-fill:white; -fx-font-weight:800; -fx-background-color:"+bg+";");
-        updatePreviewImage();
+    private void styleBadge(Label badge, String extra) {
+        badge.setAlignment(Pos.CENTER);
+        badge.setStyle(
+                "-fx-padding:4 10; -fx-background-radius:9999; -fx-font-weight:700; -fx-border-radius:9999; -fx-border-color:#e5e7eb; -fx-border-width:1;"
+                        + extra
+        );
     }
 
-    // ---- API ----
-    @Override public boolean hasSelection() { return hasSel; }
-    @Override public int selectedFloor()   { return sel; }
-    @Override public void resetSelection() { hasSel = false; floorDropdown.getSelectionModel().clearSelection(); banner.setText(""); }
-    @Override public boolean emergency()   { return emergency.isSelected(); }
-    @Override public void resetEmergency() { emergency.setSelected(false); }
-    @Override public DoorState doorState() { return door; }
-    @Override public void setDoorState(DoorState s) { door = s; applyDoorVisuals(); }
-    @Override public boolean overloaded()  { return overload; }
-    @Override public void setOverloaded(boolean v) { overload = v; banner.setText(v ? "OVERLOAD" : ""); }
-    @Override public boolean obstructed()  { return obstacle; }
-    @Override public void setObstructed(boolean v) { obstacle = v; banner.setText(v ? "OBSTRUCTED" : ""); }
-    @Override public void setCurrentFloor(int f) { floorLbl.setText(String.valueOf(f)); }
-    @Override public void setDirection(String s) { dirLbl.setText(s); }
+    private int clamp(int v, int lo, int hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
 }
