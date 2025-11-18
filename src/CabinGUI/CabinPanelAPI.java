@@ -19,3 +19,13 @@ public interface CabinPanelAPI {
     void setCurrentFloor(int f);
     void setDirection(String s);
 }
+
+/*
+APIS from Class
+void goToFloor(Floor)
+Floor targetFloor()
+Floor currentFloor()
+Direction currentDirection()
+Boolean stopped()
+Boolean overweightStatus()
+*/
