@@ -14,19 +14,22 @@ public class ElevatorController {
     public ElevatorController(Wiring.EventBus bus,
                               LobbyGUI.LobbyPanelAPI lobby,
                               CabinGUI.CabinPanelAPI cabin) {
-        // TODO: save fields
-        // TODO: wireSubscriptions();
-        // TODO: pushUi();
+
+        this.bus = bus;
+        this.lobby = lobby;
+        this.cabin = cabin;
+
+        wireSubscriptions();
+        pushUi();
     }
 
     // ====== BUS SUBSCRIPTIONS ======
-    /** TODO: subscribe to UI_HALL_CALL_UP/DOWN, UI_CABIN_SELECT, SIM_FLOOR_TICK, SIM_ARRIVED */
     private void wireSubscriptions() {
-        // TODO: bus.subscribe(Topics.UI_HALL_CALL_UP,   e -> { queue add; schedule(); });
-        // TODO: bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> { queue add; schedule(); });
-        // TODO: bus.subscribe(Topics.UI_CABIN_SELECT,   e -> { queue add; schedule(); });
-        // TODO: bus.subscribe(Topics.SIM_FLOOR_TICK,    e -> { currentFloor = ...; pushUi(); });
-        // TODO: bus.subscribe(Topics.SIM_ARRIVED,       e -> { currentFloor = ...; moving=false; clearServed(currentFloor); pushUi(); schedule(); });
+        bus.subscribe(Topics.UI_HALL_CALL_UP,   e -> { queue add; schedule(); });
+        bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> { queue add; schedule(); });
+        bus.subscribe(Topics.UI_CABIN_SELECT,   e -> { queue add; schedule(); });
+        bus.subscribe(Topics.SIM_FLOOR_TICK,    e -> { currentFloor = ...; pushUi(); });
+        bus.subscribe(Topics.SIM_ARRIVED,       e -> { currentFloor = ...; moving=false; clearServed(currentFloor); pushUi(); schedule(); });
     }
 
     // ====== SCHEDULING POLICY ======
@@ -57,9 +60,9 @@ public class ElevatorController {
     }
 
     // ====== FIELDS ======
-    // private final Wiring.EventBus bus; private final LobbyGUI.LobbyPanelAPI lobby; private final CabinGUI.CabinPanelAPI cabin;
-    // private int currentFloor = 0, targetFloor = 0; private boolean moving = false;
-    // private final java.util.Set<Integer> hallUp = new java.util.concurrent.ConcurrentSkipListSet<>();
-    // private final java.util.Set<Integer> hallDown = new java.util.concurrent.ConcurrentSkipListSet<>();
-    // private final java.util.Set<Integer> cabinSel = new java.util.concurrent.ConcurrentSkipListSet<>();
+    private final Wiring.EventBus bus; private final LobbyGUI.LobbyPanelAPI lobby; private final CabinGUI.CabinPanelAPI cabin;
+    private int currentFloor = 0, targetFloor = 0; private boolean moving = false;
+    private final java.util.Set<Integer> hallUp = new java.util.concurrent.ConcurrentSkipListSet<>();
+    private final java.util.Set<Integer> hallDown = new java.util.concurrent.ConcurrentSkipListSet<>();
+    private final java.util.Set<Integer> cabinSel = new java.util.concurrent.ConcurrentSkipListSet<>();
 }
