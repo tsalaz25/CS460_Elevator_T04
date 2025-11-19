@@ -33,6 +33,7 @@ public class DemoSystemApp extends Application {
         bootstrapCoreComponents();
         wireUiCallbacks();
         bootstrapDomainComponents();
+        System.out.println("[DemoSystemApp] Booted with InMemoryEventBus + MockSim");
 
         Scene scene = new Scene(buildLayout(), 900, 420);
         stage.setTitle("Elevator Control Demo");
