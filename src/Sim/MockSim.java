@@ -2,40 +2,145 @@ package Sim;
 
 import Wiring.EventBus;
 import Wiring.Topics;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.util.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * Lightweigh Motion SIm that advances one floor per tick in response to Controller Commands
+ */
 public class MockSim {
 
+    private static final long TICK_MS = 750L;
+    private final EventBus bus;
+    private final ScheduledExecutorService scheduler;
+    private final Object stateLock = new Object();
+    private final Deque<Integer> pendingTargets = new  ArrayDeque<>();
+    private ScheduledFuture<?> tickerFuture;
+    private int currFloor = -1;
+    private Integer activeTarget = null;
+
     // ====== CONSTRUCTION ======
-    /** TODO: keep bus reference; subscribe to CTRL_CMD_MOVE_TO; set up timing (ScheduledExecutorService or Timeline) */
-    public MockSim(Wiring.EventBus bus /*, Motor motor, Sensor sensor */) {
-        // TODO: this.bus = bus; this.motor = motor; this.sensor = sensor;
-        // TODO: bus.subscribe(Topics.CTRL_CMD_MOVE_TO, e -> onMoveTo((Integer)e.payload()));
-        // TODO: init ticker
+    public MockSim(EventBus bus){
+        this.bus = bus;
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "MockSimTicker");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        this.bus.subscribe(Topics.CTRL_CMD_MOVE_TO, event -> {
+            Object payload = event.payload();
+            if (payload instanceof Integer targetFloor) {
+                onMoveTo(targetFloor);
+            }
+        });
     }
 
     // ====== COMMAND HANDLERS ======
-    /** TODO: store target; if current==target publish SIM_ARRIVED; else start ticking toward target */
     private void onMoveTo(int targetFloor) {
-        // TODO: set target; if equals current -> bus.publish(SIM_ARRIVED, current)
-        // TODO: start ticking if not moving
+        List<Integer> immediateArrivals = new ArrayList<>();
+        synchronized (stateLock) {
+            pendingTargets.add(targetFloor);
+            assignNextTargetsLocked(immediateArrivals);
+        }
+
+        for (Integer floor : immediateArrivals) {
+            bus.publish(Topics.SIM_ARRIVED, floor);
+        }
     }
 
     // ====== TICK LOOP ======
-    /** TODO: every ~500–700ms move one floor toward target; publish SIM_FLOOR_TICK; on arrival publish SIM_ARRIVED and stop */
     private void tick() {
-        // TODO: if current==target -> stop; publish SIM_ARRIVED
-        // TODO: else current += sign(target - current); publish SIM_FLOOR_TICK(current)
+        Integer floorTick = null;
+        Integer arrivalFloor = null;
+        List<Integer> chainedArrivals = new ArrayList<>();
+
+        synchronized (stateLock) {
+            if (activeTarget == null) {
+                stopTickerLocked();
+                return;
+            }
+
+
+            int direction = Integer.compare(activeTarget, currFloor);
+            if (direction == 0) {
+                arrivalFloor = currFloor;
+                activeTarget = null;
+                chainedArrivals = new ArrayList<>();
+                assignNextTargetsLocked(chainedArrivals);
+            } else {
+                currFloor += direction;
+                floorTick = currFloor;
+
+                if (currFloor == activeTarget) {
+                    arrivalFloor = currFloor;
+                    activeTarget = null;
+                    chainedArrivals = new ArrayList<>();
+                    assignNextTargetsLocked(chainedArrivals);
+                }
+            }
+        }
+
+        if (floorTick != null) {
+            bus.publish(Topics.SIM_FLOOR_TICK, floorTick);
+        }
+
+        if (arrivalFloor != null) {
+            bus.publish(Topics.SIM_FLOOR_TICK, arrivalFloor);
+        }
+
+        if (chainedArrivals != null) {
+            for (Integer floor : chainedArrivals) {
+                bus.publish(Topics.SIM_ARRIVED, floor);
+            }
+        }
     }
 
-    // ====== FIELDS ======
-    // private final Wiring.EventBus bus;
-    // private volatile int current = 0;
-    // private volatile Integer target = null;
-    // private volatile boolean moving = false;
-    // private java.util.concurrent.ScheduledExecutorService exec; // or Timeline if you prefer FX
-    // private MotionSim.Motor motor; // TODO: integrate later
-    // private MotionSim.Sensor sensor;
+    // ====== INTERNAL HELPERS ======
+    private void assignNextTargetsLocked(List<Integer> immediateArrivals) {
+        while (activeTarget == null && !pendingTargets.isEmpty()) {
+            int next = pendingTargets.poll();
+            if (next == currFloor) {
+                immediateArrivals.add(currFloor);
+            } else {
+                activeTarget = next;
+                ensureTickerRunningLocked();
+            }
+        }
+
+        if (activeTarget == null && pendingTargets.isEmpty()) {
+            stopTickerLocked();
+        }
+    }
+
+    // ======  HELPERS ======
+    private void ensureTickerRunningLocked() {
+        if (tickerFuture == null || tickerFuture.isCancelled() || tickerFuture.isDone()) {
+            tickerFuture = scheduler.scheduleAtFixedRate(this::tick, 0,  TICK_MS, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private void stopTickerLocked() {
+        if (tickerFuture != null) {
+            tickerFuture.cancel(false);
+            tickerFuture = null;
+        }
+    }
 }
+
+
+/*
+* @Tomas MockSim — Create a lightweight simulator that subscribes to CTRL_CMD_MOVE_TO(int) and “moves” one floor
+* per tick (e.g., every ~500–700 ms) from the current floor toward the target. On each tick,
+* publish SIM_FLOOR_TICK(current); when current == target, publish SIM_ARRIVED(current) and stop the tick loop.
+* Decide how to handle mid-travel commands (ignore, queue, or retarget—pick one and keep it consistent),
+* ensure ticks are monotonic (no skipping floors), and make the tick scheduler deterministic.
+* No UI calls from here—only bus publishes. Keep shared state (current, target, moving) safe for the scheduler
+* you choose (Timeline or ScheduledExecutorService).
+ */
