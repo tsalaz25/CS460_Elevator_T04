@@ -1,4 +1,5 @@
 package Control;
+
 import Wiring.EventBus;
 import Wiring.Topics;
 import LobbyGUI.LobbyPanelAPI;
@@ -10,95 +11,120 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ElevatorController {
 
-    // ====== CONSTRUCTION ======
-    public ElevatorController(Wiring.EventBus bus,
-                              LobbyGUI.LobbyPanelAPI lobby,
-                              CabinGUI.CabinPanelAPI cabin) {
+    // ====== FIELDS ======
+    private final EventBus bus;
+    private final LobbyPanelAPI lobby;
+    private final CabinPanelAPI cabin;
 
+    private int currentFloor = 0;
+    private int targetFloor = 0;
+    private boolean moving = false;
+
+    // Pending requests
+    private final Set<Integer> hallUp   = new ConcurrentSkipListSet<>();
+    private final Set<Integer> hallDown = new ConcurrentSkipListSet<>();
+    private final Set<Integer> cabinSel = new ConcurrentSkipListSet<>();
+
+    // ====== CONSTRUCTION ======
+    public ElevatorController(EventBus bus,
+                              LobbyPanelAPI lobby,
+                              CabinPanelAPI cabin) {
         this.bus = bus;
         this.lobby = lobby;
         this.cabin = cabin;
 
         wireSubscriptions();
-        pushUi();
+        pushUi(); // initial state
     }
 
     // ====== BUS SUBSCRIPTIONS ======
-    // Subscribes the ElevatorController to the event bus, sets
-    // actions for Hall Up, Hall Down, Cabin Select, Sim Floor Tick, and Sim Arrive
     private void wireSubscriptions() {
 
-        // Sets Hall Up
+        // Hall Up call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_UP, e -> {
             int f = (int) e.payload();
             hallUp.add(f);
             schedule();
         });
 
-        // Sets Hall Down
+        // Hall Down call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> {
             int f = (int) e.payload();
             hallDown.add(f);
             schedule();
         });
 
-        // Sets Cabin Select
+        // Cabin floor selection
         bus.subscribe(Topics.UI_CABIN_SELECT, e -> {
             int f = (int) e.payload();
             cabinSel.add(f);
             schedule();
         });
 
-        // Sets Sim Floor Tick
+        // Simulator reports a floor tick (we moved one floor)
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
             int f = (int) e.payload();
             currentFloor = f;
-            pushUi();
+
+            // Treat "arrival" as: while moving, tick floor == target
+            if (moving && currentFloor == targetFloor) {
+                moving = false;
+                clearServed(currentFloor);
+                pushUi();
+                schedule(); // look for next work
+            } else {
+                pushUi();
+            }
         });
 
-        // Sets Sim Arrive
+        // SIM_ARRIVED is optional for us now; we just log it if it comes.
         bus.subscribe(Topics.SIM_ARRIVED, e -> {
-            int f = (int) e.payload();
-            currentFloor = f;
-            moving = false;
-
-            clearServed(f);
-            pushUi();
-            schedule();
+            // You can log if you want:
+            // System.out.println("[CTRL] SIM_ARRIVED at floor " + e.payload());
+            // But logic is already handled in SIM_FLOOR_TICK.
         });
     }
 
     // ====== SCHEDULING POLICY ======
-    // This method defines how the elevator should respond to a scheduling request, determines
-    // if the elevator is in use, does not need to move, or needs to be dispatched to a floor
     private void schedule() {
-
-        // Elevator is in motion, cannot schedule at this time
+        // If the car is already moving, we don't change the active command
         if (moving) return;
 
         // Find the closest pending request
         Integer next = pickNearest();
 
-        // No pending requests or pending request is this floor
-        if (next == null || next == currentFloor) {
+        if (next == null) {
+            // No pending work → idle at currentFloor
             targetFloor = currentFloor;
             pushUi();
             return;
         }
 
-        // Normal case, send elevator to nearest pending request
+        // If next is the current floor, immediately serve it (no motion)
+        if (next == currentFloor) {
+            clearServed(currentFloor);
+            pushUi();
+            // There might still be other requests; check again
+            next = pickNearest();
+            if (next == null || next == currentFloor) {
+                targetFloor = currentFloor;
+                pushUi();
+                return;
+            }
+        }
+
+        // Normal case: move to the selected next floor
         targetFloor = next;
         moving = true;
         bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
         pushUi();
     }
 
-    // Determines the closest pending request to the elevator
+    // Pick the nearest floor with any kind of pending request
     private Integer pickNearest() {
         Integer best = null;
         int bestDist = Integer.MAX_VALUE;
 
-        // Loops through pending Hall Up requests
         for (int f : hallUp) {
             int d = Math.abs(f - currentFloor);
             if (d < bestDist) {
@@ -107,7 +133,6 @@ public class ElevatorController {
             }
         }
 
-        // Loops through pending Hall Down requests
         for (int f : hallDown) {
             int d = Math.abs(f - currentFloor);
             if (d < bestDist) {
@@ -116,7 +141,6 @@ public class ElevatorController {
             }
         }
 
-        // Loops through pending Cabin Selection requests
         for (int f : cabinSel) {
             int d = Math.abs(f - currentFloor);
             if (d < bestDist) {
@@ -128,56 +152,41 @@ public class ElevatorController {
         return best;
     }
 
-    // Removes pending request upon completion
-    private void clearServed(int f) {
+    // ====== CLEAR SERVED REQUESTS ======
+    private void clearServed(int floor) {
+        // Drop from all queues
+        hallUp.remove(floor);
+        hallDown.remove(floor);
+        cabinSel.remove(floor);
 
-        // Attempts to remove the request from hallUp and hallDown
-        boolean hadUp = hallUp.remove(f);
-        boolean hadDown = hallDown.remove(f);
-
-        // Attempts to remove the request from cabinSel
-        cabinSel.remove(f);
-
-        // Reset lamps if hallUp or hallDown
-        if (hadUp) {
+        // Always clear lobby lamps when any hall request is served.
+        Platform.runLater(() -> {
             lobby.resetUpRequest();
-        }
-        if (hadDown) {
             lobby.resetDownRequest();
-        }
+            lobby.setMoving(false); // make sure buttons are enabled again
+        });
     }
 
     // ====== UI UPDATES ======
-    // This method pushes the updated UI after every action and tick
     private void pushUi() {
         Platform.runLater(() -> {
-
-            // Updates current floor
+            // Cabin always reflects the car position
             cabin.setCurrentFloor(currentFloor);
 
-            // Calculates then updates direction
+            // Direction for cabin display
             String direction;
-            if (targetFloor > currentFloor) {
+            if (moving && targetFloor > currentFloor) {
                 direction = "UP";
-            } else if (targetFloor < currentFloor) {
+            } else if (moving && targetFloor < currentFloor) {
                 direction = "DOWN";
             } else {
                 direction = "IDLE";
             }
             cabin.setDirection(direction);
+
+            // Let Lobby know if the car is moving so it can enable/disable buttons
+            lobby.setMoving(moving);
         });
     }
-
-    // ====== FIELDS ======
-    private final Wiring.EventBus bus;
-    private final LobbyGUI.LobbyPanelAPI lobby;
-    private final CabinGUI.CabinPanelAPI cabin;
-
-    private int currentFloor = 0;
-    private int targetFloor = 0;
-    private boolean moving = false;
-
-    private final Set<Integer> hallUp   = new ConcurrentSkipListSet<>();
-    private final Set<Integer> hallDown = new ConcurrentSkipListSet<>();
-    private final Set<Integer> cabinSel = new ConcurrentSkipListSet<>();
 }
+

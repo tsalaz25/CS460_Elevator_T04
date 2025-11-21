@@ -1,14 +1,17 @@
 package LobbyGUI;
 
 public interface LobbyPanelAPI {
+
+    // Lamp/query API
     boolean upRequested();
     boolean downRequested();
     void resetUpRequest();
     void resetDownRequest();
 
+    // For wiring & diagnostics
     int getCurrentFloor();
-
-    // Optional helpers for integration/testing
     int getTargetFloor();
+
     boolean isMoving();
+    void setMoving(boolean moving);
 }

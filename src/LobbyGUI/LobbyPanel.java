@@ -13,15 +13,15 @@ import javafx.util.Duration;
 
 /**
  * Lobby panel with:
- * - Target floor dropdown (0..10)
- * - Red-on-black floor display
+ * - Viewing-floor dropdown (0..10)
+ * - "Floor X" label showing which floor this lobby represents
  * - Up/Down buttons that light when pressed
  *
- * Integration mode (systemMode=true):
+ * Integration mode (systemMode = true):
  *   - Does NOT self-move; just fires callbacks on button presses
- *   - Controller should call setCurrentFloor/setTargetFloor/resetUp/Down
+ *   - Controller should call setMoving(...) if it wants to disable interaction
  *
- * Standalone demo mode (systemMode=false):
+ * Standalone demo mode (systemMode = false):
  *   - A small Timeline simulates travel one floor per tick
  */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
@@ -34,9 +34,9 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // ----- UI state -----
     private boolean upLamp = false;
     private boolean downLamp = false;
-    private int currentFloor = 0;
-    private int targetFloor = 0;
-    private boolean moving = false;
+    private int currentFloor = 0;   // only used by demo mode
+    private int targetFloor = 0;    // "viewing floor" in system mode / demo target in demo mode
+    private boolean moving = false; // used for disabling controls
 
     // ----- Controls -----
     private final Button upBtn = new Button("▲");
@@ -69,12 +69,29 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     @Override public boolean upRequested()   { return upLamp; }
     @Override public boolean downRequested() { return downLamp; }
 
-    @Override public void resetUpRequest()   { upLamp = false; applyStyles(); refreshInteractivity(); }
-    @Override public void resetDownRequest() { downLamp = false; applyStyles(); refreshInteractivity(); }
+    @Override public void resetUpRequest() {
+        upLamp = false;
+        applyStyles();
+        refreshInteractivity();
+    }
+
+    @Override public void resetDownRequest() {
+        downLamp = false;
+        applyStyles();
+        refreshInteractivity();
+    }
+
     @Override public int getCurrentFloor() { return currentFloor; }
+
+    // In system mode, this means: "which floor is this lobby representing?"
     @Override public int getTargetFloor() { return targetFloor; }
 
     @Override public boolean isMoving() { return moving; }
+
+    @Override public void setMoving(boolean m) {
+        this.moving = m;
+        refreshInteractivity();
+    }
 
     // ============================================================
     // UI setup
@@ -127,7 +144,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         floorDropdown.setOnAction(e -> {
             Integer v = floorDropdown.getValue();
             if (v != null) {
-                targetFloor = clamp(v, 0, 10); // this now means “floor I am on”
+                targetFloor = clamp(v, 0, 10); // in system mode: "floor I am on"
                 display.setText("Floor " + v);
             }
             refreshInteractivity();
@@ -135,20 +152,21 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
         upBtn.setOnAction(e -> {
             // light the lamp
-            upLamp = true; downLamp = false;
+            upLamp = true;
+            downLamp = false;
             applyStyles();
 
             if (systemMode) {
                 if (onUpPressed != null) onUpPressed.run();
             } else {
-                // standalone demo travel
                 triggerDemoTravel();
             }
             refreshInteractivity();
         });
 
         downBtn.setOnAction(e -> {
-            downLamp = true; upLamp = false;
+            downLamp = true;
+            upLamp = false;
             applyStyles();
 
             if (systemMode) {
@@ -166,7 +184,8 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private void triggerDemoTravel() {
         if (currentFloor == targetFloor) {
             // no-op arrival behavior
-            upLamp = false; downLamp = false;
+            upLamp = false;
+            downLamp = false;
             applyStyles();
             refreshInteractivity();
             return;
@@ -183,14 +202,15 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
             return;
         }
         currentFloor += (targetFloor > currentFloor) ? 1 : -1;
-        display.setText(Integer.toString(currentFloor));
+        display.setText("Floor " + currentFloor);
         if (currentFloor == targetFloor) finishTravel();
     }
 
     private void finishTravel() {
         moving = false;
         travel.stop();
-        upLamp = false; downLamp = false; // dim both on arrival
+        upLamp = false;
+        downLamp = false; // dim both on arrival
         applyStyles();
         refreshInteractivity();
     }
@@ -210,14 +230,20 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         downBtn.setStyle(baseButtonStyle() +
                 (downLamp ? "; -fx-background-color:#a7f3d0; -fx-text-fill:#1b2a4e;"
                         : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
-        display.setText(Integer.toString(currentFloor));
+        // display text is managed when changing floors, not here
     }
 
     private void refreshInteractivity() {
-        boolean atTarget = (currentFloor == targetFloor);
-        upBtn.setDisable(moving || atTarget);
-        downBtn.setDisable(moving || atTarget);
-        floorDropdown.setDisable(moving);
+        // Only disable controls while the elevator is moving in system mode
+        if (systemMode) {
+            upBtn.setDisable(moving);
+            downBtn.setDisable(moving);
+            floorDropdown.setDisable(moving);
+        } else {
+            upBtn.setDisable(false);
+            downBtn.setDisable(false);
+            floorDropdown.setDisable(false);
+        }
     }
 
     private int clamp(int v, int lo, int hi) {
