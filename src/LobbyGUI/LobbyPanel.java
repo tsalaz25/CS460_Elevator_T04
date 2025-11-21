@@ -11,49 +11,85 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
+// TODO TOMAS: when you add a lobby door indicator, you will likely need:
+// import CabinGUI.DoorState;
+
 /**
  * Lobby panel with:
- * - Viewing-floor dropdown (0..10)
- * - "Floor X" label showing which floor this lobby represents
- * - Up/Down buttons that light when pressed
+ *  - Viewing-floor dropdown (0..10)
+ *  - "Floor X" label showing which floor this lobby represents
+ *  - Up/Down buttons that light when pressed
+ *  - Fire button (UI only; controller will implement behavior)
  *
  * Integration mode (systemMode = true):
- *   - Does NOT self-move; just fires callbacks on button presses
- *   - Controller should call setMoving(...) if it wants to disable interaction
+ *   - Does NOT self-move; just fires callbacks on button presses.
+ *   - Controller should call setMoving(...) when elevator is moving.
  *
  * Standalone demo mode (systemMode = false):
- *   - A small Timeline simulates travel one floor per tick
+ *   - Timeline simulates movement floor-by-floor.
+ *
+ * TODO DANIEL:
+ *   - Implement fire button styles and behavior (toggle, callback).
+ *
+ * TODO TOMAS:
+ *   - Add a door-state label/badge if you want the lobby to show door OPEN/CLOSED.
+ *   - Hook it up to controller once door logic is ready.
  */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
-    // ----- Integration hooks -----
+    // ------------------------------------------------------------
+    // Integration callbacks
+    // ------------------------------------------------------------
     private Runnable onUpPressed;
     private Runnable onDownPressed;
+    private Runnable onFireToggled;  // TODO DANIEL: used to notify controller
+
     private boolean systemMode = true;  // true => no internal travel; UI is "dumb"
 
-    // ----- UI state -----
+    // ------------------------------------------------------------
+    // UI state
+    // ------------------------------------------------------------
     private boolean upLamp = false;
     private boolean downLamp = false;
+
     private int currentFloor = 0;   // only used by demo mode
     private int targetFloor = 0;    // "viewing floor" in system mode / demo target in demo mode
     private boolean moving = false; // used for disabling controls
 
-    // ----- Controls -----
-    private final Button upBtn = new Button("▲");
+    private boolean fireActive = false;  // TODO DANIEL: track fire UI toggle
+
+    // TODO TOMAS:
+    // If you add a door indicator:
+    // private DoorState doorState = DoorState.CLOSED;
+    // private final Label doorBadge = new Label("CLOSED");
+
+    // ------------------------------------------------------------
+    // Controls
+    // ------------------------------------------------------------
+    private final Button upBtn   = new Button("▲");
     private final Button downBtn = new Button("▼");
+    private final Button fireBtn = new Button("FIRE"); // TODO DANIEL: style and label ON/OFF
+
     private final ComboBox<Integer> floorDropdown = new ComboBox<>();
     private final Label display = new Label("Floor 0");
-    private final Label title = new Label("Lobby Panel");
+    private final Label title   = new Label("Lobby Panel");
 
-    // ----- Standalone demo travel -----
-    private final Timeline travel = new Timeline(new KeyFrame(Duration.millis(700), e -> stepTowardTarget()));
+    // ------------------------------------------------------------
+    // Standalone demo travel
+    // ------------------------------------------------------------
+    private final Timeline travel =
+            new Timeline(new KeyFrame(Duration.millis(700), e -> stepTowardTarget()));
 
+    // ============================================================
+    // Constructor
+    // ============================================================
     public LobbyPanel() {
         buildUI();
         wireHandlers();
         travel.setCycleCount(Timeline.INDEFINITE);
         refreshInteractivity();
         applyStyles();
+        // TODO DANIEL: once you define fireActive behavior, call applyFireStyles() from here.
     }
 
     // ============================================================
@@ -63,8 +99,36 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     public void setOnDownPressed(Runnable r) { this.onDownPressed = r; }
     public void setSystemMode(boolean v)     { this.systemMode = v; }
 
+    // Fire callbacks for controller wiring
+    @Override
+    public void setOnFireToggled(Runnable r) {
+        // TODO DANIEL:
+        // Store the callback so the fire button can notify the controller.
+        this.onFireToggled = r;
+    }
+
+    @Override
+    public void setFireActive(boolean active) {
+        // TODO DANIEL:
+        //  - Update fireActive field.
+        //  - Update fire button text & style (FIRE ON / FIRE OFF).
+        //  - Optional: disable Up/Down when fireActive is true.
+        //
+        // Example:
+        // this.fireActive = active;
+        // applyFireStyles();
+        this.fireActive = active;
+    }
+
+    @Override
+    public boolean isFireActive() {
+        // TODO DANIEL:
+        // If you do more complex state, make sure this reflects it.
+        return fireActive;
+    }
+
     // ============================================================
-    // LobbyPanelAPI
+    // LobbyPanelAPI core
     // ============================================================
     @Override public boolean upRequested()   { return upLamp; }
     @Override public boolean downRequested() { return downLamp; }
@@ -136,7 +200,21 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
 
-        card.getChildren().addAll(title, display, selectorRow, btnRow);
+        // TODO DANIEL:
+        // Style fireBtn and decide where it goes visually.
+        fireBtn.setPrefWidth(160);
+
+        VBox controls = new VBox(8, selectorRow, btnRow, fireBtn);
+        controls.setAlignment(Pos.CENTER);
+
+        // TODO TOMAS:
+        // If you add a door badge, add it here as well.
+        // Example:
+        // HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
+        // doorRow.setAlignment(Pos.CENTER);
+        // card.getChildren().addAll(title, display, controls, doorRow);
+
+        card.getChildren().addAll(title, display, controls);
         setCenter(card);
     }
 
@@ -175,6 +253,23 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
                 triggerDemoTravel();
             }
             refreshInteractivity();
+        });
+
+        // TODO DANIEL:
+        // Hook up fire button to toggle fireActive and notify controller via onFireToggled.
+        //
+        fireBtn.setOnAction(e -> {
+            // Example plan:
+            // 1) Toggle local state:
+            //    fireActive = !fireActive;
+            // 2) Apply styles:
+            //    applyFireStyles();
+            // 3) Notify controller (DemoSystemApp will publish a bus event here):
+            //    if (onFireToggled != null) onFireToggled.run();
+            fireActive = !fireActive;
+            if (onFireToggled != null) {
+                onFireToggled.run();
+            }
         });
     }
 
@@ -228,16 +323,25 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
                 (upLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
                         : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
         downBtn.setStyle(baseButtonStyle() +
-                (downLamp ? "; -fx-background-color:#a7f3d0; -fx-text-fill:#1b2a4e;"
+                (downLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
                         : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
         // display text is managed when changing floors, not here
     }
 
+    // TODO DANIEL:
+    // You can add a helper to centralize fire button styling.
+    // private void applyFireStyles() { ... }
+
+    // TODO TOMAS:
+    // Similar helper for door badge styling, once you add it.
+
     private void refreshInteractivity() {
         // Only disable controls while the elevator is moving in system mode
         if (systemMode) {
-            upBtn.setDisable(moving);
-            downBtn.setDisable(moving);
+            // TODO DANIEL:
+            // You can also disable Up/Down when fireActive == true.
+            upBtn.setDisable(moving /* || fireActive */);
+            downBtn.setDisable(moving /* || fireActive */);
             floorDropdown.setDisable(moving);
         } else {
             upBtn.setDisable(false);
@@ -250,4 +354,3 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         return Math.max(lo, Math.min(hi, v));
     }
 }
-

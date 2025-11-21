@@ -16,10 +16,14 @@ import LobbyGUI.LobbyPanel;
 import CabinGUI.CabinPanel;
 
 /**
+ * System demo:
+ *  - Uses InMemoryEventBus + MockSim
+ *  - Shows Lobby + Cabin panels
+ *  - Wires UI events into the controller via the bus
+ *
  * TODO:
- *  - Swap InMemoryEventBus with the SoftwareBus adapter once available.
- *  - Replace MockSim with MotionSim.Simulator when the motion stack is ready.
- *  - Add any lightweight logging/diagnostics the team finds useful.
+ *  - Swap InMemoryEventBus with SoftwareBus adapter once available.
+ *  - Replace MockSim with MotionSim.Simulator when ready.
  */
 public class DemoSystemApp extends Application {
 
@@ -29,7 +33,8 @@ public class DemoSystemApp extends Application {
     private ElevatorController controller;
     private MockSim simulator;
 
-    @Override public void start(Stage stage) {
+    @Override
+    public void start(Stage stage) {
         bootstrapCoreComponents();
         wireUiCallbacks();
         bootstrapDomainComponents();
@@ -51,10 +56,16 @@ public class DemoSystemApp extends Application {
     private void wireUiCallbacks() {
         lobbyPanel.setOnUpPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_UP, lobbyPanel.getTargetFloor()));
+
         lobbyPanel.setOnDownPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_DOWN, lobbyPanel.getTargetFloor()));
+
         cabinPanel.setOnFloorSelected(f ->
                 bus.publish(Topics.UI_CABIN_SELECT, f));
+
+        // Fire alarm toggle → publish UI_FIRE_TOGGLED with current fireActive
+        lobbyPanel.setOnFireToggled(() ->
+                bus.publish(Topics.UI_FIRE_TOGGLED, lobbyPanel.isFireActive()));
     }
 
     private void bootstrapDomainComponents() {
