@@ -3,6 +3,7 @@ import Wiring.EventBus;
 import Wiring.Topics;
 import LobbyGUI.LobbyPanelAPI;
 import CabinGUI.CabinPanelAPI;
+import javafx.application.Platform;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -50,6 +51,8 @@ public class ElevatorController {
 
         // Sets Sim Floor Tick
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
+            int f = (int) e.payload();
+            currentFloor = f;
             pushUi();
         });
 
@@ -147,24 +150,22 @@ public class ElevatorController {
     // ====== UI UPDATES ======
     // This method pushes the updated UI after every action and tick
     private void pushUi() {
+        Platform.runLater(() -> {
 
-        // Updates current and taget floors
-        lobby.setCurrentFloor(currentFloor);
-        lobby.setTargetFloor(targetFloor);
+            // Updates current floor
+            cabin.setCurrentFloor(currentFloor);
 
-        // Updates current floor
-        cabin.setCurrentFloor(currentFloor);
-
-        // Calculates then updates direction
-        String direction;
-        if (targetFloor > currentFloor) {
-            direction = "UP";
-        } else if (targetFloor < currentFloor) {
-            direction = "DOWN";
-        } else {
-            direction = "IDLE";
-        }
-        cabin.setDirection(direction);
+            // Calculates then updates direction
+            String direction;
+            if (targetFloor > currentFloor) {
+                direction = "UP";
+            } else if (targetFloor < currentFloor) {
+                direction = "DOWN";
+            } else {
+                direction = "IDLE";
+            }
+            cabin.setDirection(direction);
+        });
     }
 
     // ====== FIELDS ======

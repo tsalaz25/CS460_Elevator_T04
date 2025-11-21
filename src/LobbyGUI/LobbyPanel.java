@@ -42,7 +42,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private final Button upBtn = new Button("▲");
     private final Button downBtn = new Button("▼");
     private final ComboBox<Integer> floorDropdown = new ComboBox<>();
-    private final Label display = new Label("0");
+    private final Label display = new Label("Floor 0");
     private final Label title = new Label("Lobby Panel");
 
     // ----- Standalone demo travel -----
@@ -71,22 +71,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
     @Override public void resetUpRequest()   { upLamp = false; applyStyles(); refreshInteractivity(); }
     @Override public void resetDownRequest() { downLamp = false; applyStyles(); refreshInteractivity(); }
-
-    @Override public void setCurrentFloor(int f) {
-        currentFloor = clamp(f, 0, 10);
-        display.setText(Integer.toString(currentFloor));
-        refreshInteractivity();
-    }
     @Override public int getCurrentFloor() { return currentFloor; }
-
-    @Override public void setTargetFloor(int f) {
-        targetFloor = clamp(f, 0, 10);
-        // keep dropdown in sync if user didn't set it directly
-        if (floorDropdown.getValue() == null || floorDropdown.getValue() != targetFloor) {
-            floorDropdown.getSelectionModel().select(targetFloor);
-        }
-        refreshInteractivity();
-    }
     @Override public int getTargetFloor() { return targetFloor; }
 
     @Override public boolean isMoving() { return moving; }
@@ -108,23 +93,23 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        display.setMinWidth(120);
+        display.setMinWidth(140);
         display.setAlignment(Pos.CENTER);
         display.setStyle(
-                "-fx-background-color:black;" +
-                        "-fx-text-fill:#ff4545;" +
-                        "-fx-font-family:'Consolas','Courier New',monospace;" +
-                        "-fx-font-size:40;" +
-                        "-fx-padding:8 14;" +
-                        "-fx-background-radius:8;" +
-                        "-fx-border-color:#111827; -fx-border-radius:8; -fx-border-width:1;"
+                "-fx-background-color:white;" +
+                        "-fx-text-fill:#1f2937;" +
+                        "-fx-font-family:'Segoe UI', sans-serif;" +
+                        "-fx-font-size:24;" +
+                        "-fx-padding:10 14;" +
+                        "-fx-background-radius:10;" +
+                        "-fx-border-color:#d1d5db; -fx-border-radius:10; -fx-border-width:1;"
         );
 
         for (int i = 0; i <= 10; i++) floorDropdown.getItems().add(i);
         floorDropdown.getSelectionModel().select(0);
         floorDropdown.setPrefWidth(160);
 
-        HBox selectorRow = new HBox(10, new Label("Select target:"), floorDropdown);
+        HBox selectorRow = new HBox(10, new Label("Viewing floor:"), floorDropdown);
         selectorRow.setAlignment(Pos.CENTER);
 
         upBtn.setPrefWidth(90);
@@ -142,7 +127,8 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         floorDropdown.setOnAction(e -> {
             Integer v = floorDropdown.getValue();
             if (v != null) {
-                targetFloor = clamp(v, 0, 10);
+                targetFloor = clamp(v, 0, 10); // this now means “floor I am on”
+                display.setText("Floor " + v);
             }
             refreshInteractivity();
         });
