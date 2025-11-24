@@ -89,7 +89,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         travel.setCycleCount(Timeline.INDEFINITE);
         refreshInteractivity();
         applyStyles();
-        // TODO DANIEL: once you define fireActive behavior, call applyFireStyles() from here.
+        applyFireStyles();  // ensure fire button starts in the correct visual state
     }
 
     // ============================================================
@@ -102,28 +102,21 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // Fire callbacks for controller wiring
     @Override
     public void setOnFireToggled(Runnable r) {
-        // TODO DANIEL:
         // Store the callback so the fire button can notify the controller.
         this.onFireToggled = r;
     }
 
     @Override
     public void setFireActive(boolean active) {
-        // TODO DANIEL:
-        //  - Update fireActive field.
-        //  - Update fire button text & style (FIRE ON / FIRE OFF).
-        //  - Optional: disable Up/Down when fireActive is true.
-        //
-        // Example:
-        // this.fireActive = active;
-        // applyFireStyles();
+        // Update local fire flag and make the UI match.
         this.fireActive = active;
+        applyFireStyles();
+        refreshInteractivity();
     }
 
     @Override
     public boolean isFireActive() {
-        // TODO DANIEL:
-        // If you do more complex state, make sure this reflects it.
+        // Reflect the current UI fire state.
         return fireActive;
     }
 
@@ -259,14 +252,14 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         // Hook up fire button to toggle fireActive and notify controller via onFireToggled.
         //
         fireBtn.setOnAction(e -> {
-            // Example plan:
-            // 1) Toggle local state:
-            //    fireActive = !fireActive;
-            // 2) Apply styles:
-            //    applyFireStyles();
-            // 3) Notify controller (DemoSystemApp will publish a bus event here):
-            //    if (onFireToggled != null) onFireToggled.run();
+            // 1) Toggle local UI state
             fireActive = !fireActive;
+
+            // 2) Update button look + interactivity
+            applyFireStyles();
+            refreshInteractivity();
+
+            // 3) Notify controller (DemoSystemApp will publish UI_FIRE_TOGGLED)
             if (onFireToggled != null) {
                 onFireToggled.run();
             }
@@ -328,9 +321,27 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         // display text is managed when changing floors, not here
     }
 
-    // TODO DANIEL:
-    // You can add a helper to centralize fire button styling.
-    // private void applyFireStyles() { ... }
+    private void applyFireStyles() {
+        if (fireActive) {
+            fireBtn.setText("FIRE ON");
+            fireBtn.setStyle(
+                    "-fx-font-weight:800;"
+                            + "-fx-background-color:#b91c1c;"
+                            + "-fx-text-fill:white;"
+                            + "-fx-background-radius:9999;"
+                            + "-fx-padding:6 16;"
+            );
+        } else {
+            fireBtn.setText("FIRE OFF");
+            fireBtn.setStyle(
+                    "-fx-font-weight:600;"
+                            + "-fx-background-color:#fee2e2;"
+                            + "-fx-text-fill:#7f1d1d;"
+                            + "-fx-background-radius:9999;"
+                            + "-fx-padding:6 16;"
+            );
+        }
+    }
 
     // TODO TOMAS:
     // Similar helper for door badge styling, once you add it.
@@ -338,10 +349,9 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private void refreshInteractivity() {
         // Only disable controls while the elevator is moving in system mode
         if (systemMode) {
-            // TODO DANIEL:
-            // You can also disable Up/Down when fireActive == true.
-            upBtn.setDisable(moving /* || fireActive */);
-            downBtn.setDisable(moving /* || fireActive */);
+            boolean disableCalls = moving || fireActive;
+            upBtn.setDisable(disableCalls);
+            downBtn.setDisable(disableCalls);
             floorDropdown.setDisable(moving);
         } else {
             upBtn.setDisable(false);

@@ -49,8 +49,8 @@ public class ElevatorController {
     private int targetFloor = 0;
     private boolean moving = false;
 
-    // TODO DANIEL: track fire mode once you hook up the fire-alarm topic.
-    // private boolean fireMode = false;
+    // Fire recall state
+    private boolean fireMode = false;
 
     // Pending requests
     private final Set<Integer> hallUp   = new ConcurrentSkipListSet<>();
@@ -96,24 +96,42 @@ public class ElevatorController {
             schedule();
         });
 
-        // TODO DANIEL:
-        // Subscribe to your fire-topic (e.g. Topics.UI_FIRE_TOGGLED) and control fireMode here.
-        //
-        // bus.subscribe(Topics.UI_FIRE_TOGGLED, e -> {
-        //     boolean active = (boolean) e.payload();
-        //     fireMode = active;
-        //     System.out.println("[CTRL] Fire mode = " + fireMode);
-        //
-        //     if (fireMode) {
-        //         // 1) Clear normal requests (hallUp, hallDown, cabinSel)
-        //         // 2) If currentFloor != 0, command a move to 0
-        //         // 3) If currentFloor == 0, open doors and stay put
-        //     } else {
-        //         // Leaving fire mode:
-        //         // 1) Close doors
-        //         // 2) Resume normal scheduling (schedule())
-        //     }
-        // });
+        // Fire mode toggle from LobbyPanel
+        bus.subscribe(Topics.UI_FIRE_TOGGLED, e -> {
+            boolean active = (boolean) e.payload();
+            fireMode = active;
+            System.out.println("[CTRL] Fire mode = " + fireMode);
+
+            if (fireMode) {
+                // 1) Clear normal requests
+                hallUp.clear();
+                hallDown.clear();
+                cabinSel.clear();
+
+                // 2) If not at floor 0, recall to 0
+                if (!moving && currentFloor != 0) {
+                    targetFloor = 0;
+                    moving = true;
+                    // TODO TOMAS: close doors before moving once you implement door logic.
+                    // closeDoors();
+                    bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
+                    pushUi();
+                } else if (!moving && currentFloor == 0) {
+                    // Already at recall floor: just sit here with doors open in fire mode.
+                    // TODO TOMAS: open doors once you implement door logic.
+                    // openDoors();
+                    pushUi();
+                }
+            } else {
+                // Leaving fire mode:
+                // 1) Close doors (once Tomas has door helpers)
+                // closeDoors();
+
+                // 2) Resume normal scheduling
+                schedule();
+            }
+        });
+
 
         // Simulator reports a floor tick (we moved one floor)
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
@@ -126,8 +144,14 @@ public class ElevatorController {
             if (moving && currentFloor == targetFloor) {
                 moving = false;
 
-                // TODO DANIEL:
-                // If fireMode is true AND currentFloor == 0, handle special fire-arrival behavior.
+                // Fire recall arrival at floor 0
+                if (fireMode && currentFloor == 0) {
+                    // In fire mode we want to sit at 0 with doors open and ignore normal scheduling.
+                    // TODO TOMAS: open doors once you implement door logic.
+                    // openDoors();
+                    pushUi();
+                    return;
+                }
 
                 // Normal stop: clear served requests
                 clearServed(currentFloor);
@@ -155,28 +179,30 @@ public class ElevatorController {
     // ====== SCHEDULING POLICY ======
     private void schedule() {
 
-        // TODO DANIEL:
-        // If fireMode is true, ignore normal scheduling and instead:
-        //  - ensure we're recalling to floor 0
-        //  - if already at 0, keep doors open, do not dispatch new moves.
-        //
-        // if (fireMode) {
-        //     if (!moving && currentFloor != 0) {
-        //         targetFloor = 0;
-        //         moving = true;
-        //         // TODO TOMAS: closeDoors() before moving, once implemented.
-        //         // closeDoors();
-        //         bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
-        //         pushUi();
-        //     }
-        //     return;
-        // }
+        // Fire mode overrides normal scheduling: recall to floor 0 and stay there.
+        if (fireMode) {
+            if (!moving && currentFloor != 0) {
+                targetFloor = 0;
+                moving = true;
+                // TODO TOMAS: close doors before moving once you implement door logic.
+                // closeDoors();
+                bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
+                pushUi();
+            } else if (!moving && currentFloor == 0) {
+                // Already at recall floor; just keep doors open and do nothing.
+                // TODO TOMAS: open doors once you implement door logic.
+                // openDoors();
+                pushUi();
+            }
+            return;
+        }
 
         // If the car is already moving, don't change the active command
         if (moving) {
             System.out.println("[CTRL] schedule(): already moving, ignoring.");
             return;
         }
+
 
         // Find the closest pending request
         Integer next = pickNearest();
