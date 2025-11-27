@@ -40,6 +40,8 @@ public class MockSim {
                 onMoveTo(targetFloor);
             }
         });
+
+        log("MockSim ready");
     }
 
     // ====== COMMAND HANDLERS ======
@@ -47,10 +49,12 @@ public class MockSim {
         List<Integer> immediateArrivals = new ArrayList<>();
         synchronized (stateLock) {
             pendingTargets.add(targetFloor);
+            logLocked("enqueue move->" + targetFloor);
             assignNextTargetsLocked(immediateArrivals);
         }
 
         for (Integer floor : immediateArrivals) {
+            log("immediate arrival at floor " + floor + " (already here)");
             bus.publish(Topics.SIM_ARRIVED, floor);
         }
     }
@@ -72,15 +76,18 @@ public class MockSim {
             if (direction == 0) {
                 arrivalFloor = currFloor;
                 activeTarget = null;
+                logLocked("arrival at " + currFloor);
                 chainedArrivals = new ArrayList<>();
                 assignNextTargetsLocked(chainedArrivals);
             } else {
                 currFloor += direction;
                 floorTick = currFloor;
+                logLocked("tick -> " + currFloor + " toward " + activeTarget);
 
                 if (currFloor == activeTarget) {
                     arrivalFloor = currFloor;
                     activeTarget = null;
+                    logLocked("arrival at " + currFloor);
                     chainedArrivals = new ArrayList<>();
                     assignNextTargetsLocked(chainedArrivals);
                 }
@@ -110,6 +117,7 @@ public class MockSim {
                 immediateArrivals.add(currFloor);
             } else {
                 activeTarget = next;
+                logLocked("activate target " + next);
                 ensureTickerRunningLocked();
             }
         }
@@ -130,7 +138,31 @@ public class MockSim {
         if (tickerFuture != null) {
             tickerFuture.cancel(false);
             tickerFuture = null;
+            logLocked("ticker stopped (no work)");
         }
+    }
+
+    // ====== LOGGING ======
+    private void log(String message) {
+        System.out.println("[SIM ] " + message + " | state " + stateSummary());
+    }
+
+    private void logLocked(String message) {
+        // Caller must hold stateLock
+        System.out.println("[SIM ] " + message + " | state " + stateSummaryLocked());
+    }
+
+    private String stateSummary() {
+        synchronized (stateLock) {
+            return stateSummaryLocked();
+        }
+    }
+
+    private String stateSummaryLocked() {
+        String queue = pendingTargets.isEmpty() ? "[]" : pendingTargets.toString();
+        return "curr=" + currFloor +
+                " active=" + activeTarget +
+                " queued=" + queue;
     }
 }
 

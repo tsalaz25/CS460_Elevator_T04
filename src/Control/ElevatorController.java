@@ -11,6 +11,7 @@ import javafx.application.Platform;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.stream.Collectors;
 
 /**
  * ElevatorController
@@ -67,6 +68,7 @@ public class ElevatorController {
 
         wireSubscriptions();
         pushUi(); // initial state
+        log("Controller booted");
     }
 
     // ====== BUS SUBSCRIPTIONS ======
@@ -75,7 +77,7 @@ public class ElevatorController {
         // Hall Up call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_UP, e -> {
             int f = (int) e.payload();
-            System.out.println("[CTRL] Hall UP request at floor " + f);
+            log("Hall UP request received @ floor " + f);
             hallUp.add(f);
             schedule();
         });
@@ -83,7 +85,7 @@ public class ElevatorController {
         // Hall Down call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> {
             int f = (int) e.payload();
-            System.out.println("[CTRL] Hall DOWN request at floor " + f);
+            log("Hall DOWN request received @ floor " + f);
             hallDown.add(f);
             schedule();
         });
@@ -91,7 +93,7 @@ public class ElevatorController {
         // Cabin floor selection
         bus.subscribe(Topics.UI_CABIN_SELECT, e -> {
             int f = (int) e.payload();
-            System.out.println("[CTRL] Cabin selected floor " + f);
+            log("Cabin floor selected: " + f);
             cabinSel.add(f);
             schedule();
         });
@@ -100,7 +102,7 @@ public class ElevatorController {
         bus.subscribe(Topics.UI_FIRE_TOGGLED, e -> {
             boolean active = (boolean) e.payload();
             fireMode = active;
-            System.out.println("[CTRL] Fire mode = " + fireMode);
+            log("Fire mode toggled -> " + (fireMode ? "ACTIVE" : "OFF"));
 
             if (fireMode) {
                 // 1) Clear normal requests
@@ -137,12 +139,12 @@ public class ElevatorController {
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
             int f = (int) e.payload();
             currentFloor = f;
-            System.out.println("[CTRL] Tick: currentFloor=" + currentFloor +
-                    " target=" + targetFloor + " moving=" + moving);
+            log("Tick -> floor " + currentFloor);
 
             // Arrival detection: while moving, if we tick into the target floor
             if (moving && currentFloor == targetFloor) {
                 moving = false;
+                log("Arrived at target " + currentFloor);
 
                 // Fire recall arrival at floor 0
                 if (fireMode && currentFloor == 0) {
@@ -171,7 +173,7 @@ public class ElevatorController {
 
         // Optional: SIM_ARRIVED (we don't rely on it, but you can log it)
         bus.subscribe(Topics.SIM_ARRIVED, e -> {
-            System.out.println("[CTRL] SIM_ARRIVED at floor " + e.payload());
+            log("SIM_ARRIVED at floor " + e.payload());
             // TODO (optional): if you want, you can cross-check with SIM_FLOOR_TICK logic here.
         });
     }
@@ -199,24 +201,26 @@ public class ElevatorController {
 
         // If the car is already moving, don't change the active command
         if (moving) {
-            System.out.println("[CTRL] schedule(): already moving, ignoring.");
+            log("schedule(): already moving, ignore new work");
             return;
         }
 
 
         // Find the closest pending request
         Integer next = pickNearest();
-        System.out.println("[CTRL] schedule(): current=" + currentFloor + " next=" + next);
+        log("schedule(): evaluating next stop -> " + next);
 
         if (next == null) {
             // No pending work → idle at currentFloor
             targetFloor = currentFloor;
+            log("schedule(): no pending requests, staying idle");
             pushUi();
             return;
         }
 
         // If next is the current floor, immediately serve it (no motion)
         if (next == currentFloor) {
+            log("Serving current floor " + currentFloor + " without moving");
             clearServed(currentFloor);
             // TODO TOMAS: openDoors() here when serving current floor without moving.
             // openDoors();
@@ -237,7 +241,7 @@ public class ElevatorController {
         // TODO TOMAS: close doors before moving once you implement door logic.
         // closeDoors();
 
-        System.out.println("[CTRL] schedule(): dispatching to " + targetFloor);
+        log("schedule(): dispatching to " + targetFloor);
         bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
         pushUi();
     }
@@ -276,7 +280,7 @@ public class ElevatorController {
 
     // ====== CLEAR SERVED REQUESTS ======
     private void clearServed(int floor) {
-        System.out.println("[CTRL] clearServed(" + floor + ")");
+        log("clearServed(" + floor + ")");
 
         // Drop from all queues
         hallUp.remove(floor);
@@ -339,6 +343,33 @@ public class ElevatorController {
             lobby.setMoving(moving);
         });
     }
-}
 
+    // ====== LOGGING ======
+    private void log(String message) {
+        System.out.println("[CTRL] " + message + " | state " + stateSummary());
+    }
+
+    private String stateSummary() {
+        return "curr=" + currentFloor +
+                " target=" + targetFloor +
+                " moving=" + moving +
+                " fire=" + fireMode +
+                " pending=" + pendingSummary();
+    }
+
+    private String pendingSummary() {
+        String up = summarizeSet(hallUp);
+        String down = summarizeSet(hallDown);
+        String cab = summarizeSet(cabinSel);
+        return "{up=" + up + ",down=" + down + ",cab=" + cab + "}";
+    }
+
+    private String summarizeSet(Set<Integer> set) {
+        if (set.isEmpty()) return "[]";
+        return set.stream()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+}
 
