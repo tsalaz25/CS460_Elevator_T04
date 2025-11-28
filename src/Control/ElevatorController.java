@@ -4,6 +4,7 @@ import Wiring.EventBus;
 import Wiring.Topics;
 import LobbyGUI.LobbyPanelAPI;
 import CabinGUI.CabinPanelAPI;
+import CommandCenterGUI.CommandCenterPanelAPI;
 import CabinGUI.DoorState;
 
 import javafx.application.Platform;
@@ -27,12 +28,12 @@ import java.util.stream.Collectors;
  *  - On arrival, clear requests for that floor, reset lobby lamps, and reschedule if needed.
  *  - Push basic UI state into Cabin/Lobby via their APIs.
  *
- * TODO DANIEL:
- *  - Implement fire mode:
- *      * track a fireMode flag.
- *      * override normal scheduling when fireMode is true (recall to floor 0, open doors, etc.).
- *      * subscribe to a fire-topic (e.g., UI_FIRE_TOGGLED) and control fireMode from there.
-
+ * Fire mode behavior:
+ *  - fireMode flag is toggled by UI_FIRE_TOGGLED.
+ *  - When fireMode is active:
+ *      * all pending requests are cleared
+ *      * elevator recalls to floor 0 and stays there with doors open
+ *      * normal scheduling is suspended
  */
 public class ElevatorController {
 
@@ -40,6 +41,7 @@ public class ElevatorController {
     private final EventBus bus;
     private final LobbyPanelAPI lobby;
     private final CabinPanelAPI cabin;
+    private final CommandCenterPanelAPI commandCenter;
 
     private int currentFloor = 0;
     private int targetFloor = 0;
@@ -61,10 +63,25 @@ public class ElevatorController {
         this.bus = bus;
         this.lobby = lobby;
         this.cabin = cabin;
+        this.commandCenter = null;
 
         wireSubscriptions();
         pushUi(); // initial state
-        log("Controller booted");
+        log("Controller booted (no command center)");
+    }
+
+    public ElevatorController(EventBus bus,
+                              LobbyPanelAPI lobby,
+                              CabinPanelAPI cabin,
+                              CommandCenterPanelAPI commandCenter) {
+        this.bus = bus;
+        this.lobby = lobby;
+        this.cabin = cabin;
+        this.commandCenter = commandCenter;
+
+        wireSubscriptions();
+        pushUi(); // initial state
+        log("Controller booted (with command center)");
     }
 
     // ====== BUS SUBSCRIPTIONS ======
@@ -94,7 +111,7 @@ public class ElevatorController {
             schedule();
         });
 
-        // Fire mode toggle from LobbyPanel
+        // Fire mode toggle (from Lobby and/or Command Center)
         bus.subscribe(Topics.UI_FIRE_TOGGLED, e -> {
             boolean active = (boolean) e.payload();
             fireMode = active;
@@ -120,14 +137,11 @@ public class ElevatorController {
                 }
             } else {
                 // Leaving fire mode:
-                // 1) Close doors (once Tomas has door helpers)
+                // Close doors and resume normal scheduling
                 closeDoors();
-
-                // 2) Resume normal scheduling
                 schedule();
             }
         });
-
 
         // Simulator reports a floor tick (we moved one floor)
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
@@ -164,7 +178,7 @@ public class ElevatorController {
         // Optional: SIM_ARRIVED (we don't rely on it, but you can log it)
         bus.subscribe(Topics.SIM_ARRIVED, e -> {
             log("SIM_ARRIVED at floor " + e.payload());
-            // TODO (optional): if you want, you can cross-check with SIM_FLOOR_TICK logic here.
+            // Optional cross-check with SIM_FLOOR_TICK.
         });
     }
 
@@ -192,7 +206,6 @@ public class ElevatorController {
             log("schedule(): already moving, ignore new work");
             return;
         }
-
 
         // Find the closest pending request
         Integer next = pickNearest();
@@ -263,7 +276,7 @@ public class ElevatorController {
         return best;
     }
 
-    // ====== CLEAR SERVED REQUESTS ======
+    // ====== CLEAR SERVED / CLEAR ALL ======
     private void clearServed(int floor) {
         log("clearServed(" + floor + ")");
 
@@ -280,22 +293,25 @@ public class ElevatorController {
         });
     }
 
-    // ====== DOOR HELPERS ======
-    // These are placeholders for Tomas to implement. They are NOT called yet
-    // (calls above are commented out as TODOs).
-    //
-    // Once implemented, Tomas can:
-    //  - import CabinGUI.DoorState
-    //  - call cabin.setDoorState(DoorState.OPEN/CLOSED)
-    //  - optionally also add a lobby door indicator and update that too.
+    /**
+     * Clear all pending requests (used by Command Center "Clear Requests" button).
+     */
+    public void clearAllRequests() {
+        log("clearAllRequests()");
+        hallUp.clear();
+        hallDown.clear();
+        cabinSel.clear();
+        pushUi();
+    }
 
-    private void openDoors(){
+    // ====== DOOR HELPERS ======
+    private void openDoors() {
         if (doorState == DoorState.OPEN) { return; }
         doorState = DoorState.OPEN;
         Platform.runLater(() -> cabin.setDoorState(DoorState.OPEN));
     }
 
-    private void closeDoors(){
+    private void closeDoors() {
         if (doorState == DoorState.CLOSED) { return; }
         doorState = DoorState.CLOSED;
         Platform.runLater(() -> cabin.setDoorState(DoorState.CLOSED));
@@ -318,12 +334,28 @@ public class ElevatorController {
             }
             cabin.setDirection(direction);
             cabin.setDoorState(doorState);
-            //Lobby Indicator
+
+            // Lobby Indicator
             lobby.setDoorState(doorState);
-
-
-            // Lobby only needs to know if we are moving (for disabling buttons)
             lobby.setMoving(moving);
+
+            // --- Command Center (if present) ---
+            if (commandCenter != null) {
+                commandCenter.setCurrentFloor(currentFloor);
+                // Treat having any pending work or moving as "has target"
+                boolean hasTarget =
+                        moving || !hallUp.isEmpty() || !hallDown.isEmpty() || !cabinSel.isEmpty();
+                commandCenter.setTargetFloor(targetFloor, hasTarget);
+                commandCenter.setMoving(moving);
+                commandCenter.setDirection(direction);
+                commandCenter.setDoorState(doorState);
+                commandCenter.setFireMode(fireMode);
+
+                // Send copies so UI can't mutate internal sets
+                commandCenter.setPendingHallUp(Set.copyOf(hallUp));
+                commandCenter.setPendingHallDown(Set.copyOf(hallDown));
+                commandCenter.setPendingCabin(Set.copyOf(cabinSel));
+            }
         });
     }
 
@@ -355,4 +387,5 @@ public class ElevatorController {
                 .collect(Collectors.joining(",", "[", "]"));
     }
 }
+
 

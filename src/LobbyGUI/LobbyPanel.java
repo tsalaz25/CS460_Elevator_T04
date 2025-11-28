@@ -92,7 +92,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
     @Override
     public void setDoorState(DoorState state){
-        this doorState = state;
+        this.doorState = state;
         applyDoorStyles();
     }
 
@@ -152,15 +152,18 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // ============================================================
     private void buildUI() {
         setPadding(new Insets(12));
-        setBackground(new Background(new BackgroundFill(Color.web("#f5f7fc"), CornerRadii.EMPTY, Insets.EMPTY)));
+        setBackground(new Background(new BackgroundFill(Color.web("#f5f7fc"),
+                CornerRadii.EMPTY, Insets.EMPTY)));
 
         VBox card = new VBox(12);
         card.setPadding(new Insets(14));
         card.setAlignment(Pos.TOP_CENTER);
-        card.setBackground(new Background(new BackgroundFill(Color.WHITE, new CornerRadii(16), Insets.EMPTY)));
+        card.setBackground(new Background(new BackgroundFill(Color.WHITE,
+                new CornerRadii(16), Insets.EMPTY)));
         card.setBorder(new Border(new BorderStroke(Color.web("#dde3f1"),
                 BorderStrokeStyle.SOLID, new CornerRadii(16), new BorderWidths(1))));
-        card.setStyle(card.getStyle() + "; -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0.25, 0, 6);");
+        card.setStyle(card.getStyle()
+                + "; -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0.25, 0, 6);");
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
@@ -189,18 +192,25 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         HBox btnRow = new HBox(12, upBtn, downBtn);
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
-        // TODO DANIEL:
-        // Style fireBtn and decide where it goes visually.
-        fireBtn.setPrefWidth(160);
 
+        // If you have a fire button:
+        fireBtn.setPrefWidth(160);
         VBox controls = new VBox(8, selectorRow, btnRow, fireBtn);
         controls.setAlignment(Pos.CENTER);
-        HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
-        doorRow.setAlignment(Pos.CENTER);
-        card.getChildren().addAll(title, display, controls, doorRow);
 
+        // If you ALSO have a door row, create a new Node there:
+        // HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
+        // doorRow.setAlignment(Pos.CENTER);
 
-        card.getChildren().addAll(title, display, controls);
+        // *** IMPORTANT: add each Node only once ***
+        card.getChildren().clear();
+        card.getChildren().addAll(
+                title,
+                display,
+                controls
+                // , doorRow   // if you have it, add it here ONCE
+        );
+
         setCenter(card);
     }
 

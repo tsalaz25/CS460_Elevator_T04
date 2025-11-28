@@ -14,11 +14,13 @@ import Control.ElevatorController;
 
 import LobbyGUI.LobbyPanel;
 import CabinGUI.CabinPanel;
+import CommandCenterGUI.CommandCenterPanel;
 
 /**
  * System demo:
  *  - Uses InMemoryEventBus + MockSim
  *  - Shows Lobby + Cabin panels
+ *  - Adds a separate Command Center window
  *  - Wires UI events into the controller via the bus
  *
  * TODO:
@@ -30,6 +32,8 @@ public class DemoSystemApp extends Application {
     private EventBus bus;
     private LobbyPanel lobbyPanel;
     private CabinPanel cabinPanel;
+    private CommandCenterPanel commandCenterPanel;
+
     private ElevatorController controller;
     private MockSim simulator;
 
@@ -38,12 +42,15 @@ public class DemoSystemApp extends Application {
         bootstrapCoreComponents();
         wireUiCallbacks();
         bootstrapDomainComponents();
+
         System.out.println("[DemoSystemApp] Booted with InMemoryEventBus + MockSim");
 
         Scene scene = new Scene(buildLayout(), 900, 420);
         stage.setTitle("Elevator Control Demo");
         stage.setScene(scene);
         stage.show();
+
+        showCommandCenterWindow();
     }
 
     private void bootstrapCoreComponents() {
@@ -51,26 +58,36 @@ public class DemoSystemApp extends Application {
         lobbyPanel = new LobbyPanel();
         lobbyPanel.setSystemMode(true);               // disable self-movement; rely on controller
         cabinPanel = new CabinPanel();
+        commandCenterPanel = new CommandCenterPanel();
     }
 
     private void wireUiCallbacks() {
+        // Lobby UI → bus
         lobbyPanel.setOnUpPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_UP, lobbyPanel.getTargetFloor()));
 
         lobbyPanel.setOnDownPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_DOWN, lobbyPanel.getTargetFloor()));
 
+        // Cabin UI → bus
         cabinPanel.setOnFloorSelected(f ->
                 bus.publish(Topics.UI_CABIN_SELECT, f));
 
-        // Fire alarm toggle → publish UI_FIRE_TOGGLED with current fireActive
+        // Fire alarm toggle from Lobby → bus
         lobbyPanel.setOnFireToggled(() ->
                 bus.publish(Topics.UI_FIRE_TOGGLED, lobbyPanel.isFireActive()));
+
+        // Command center fire toggle → bus
+        commandCenterPanel.setOnFireToggled(active ->
+                bus.publish(Topics.UI_FIRE_TOGGLED, active));
     }
 
     private void bootstrapDomainComponents() {
-        controller = new ElevatorController(bus, lobbyPanel, cabinPanel);
+        controller = new ElevatorController(bus, lobbyPanel, cabinPanel, commandCenterPanel);
         simulator = new MockSim(bus); // replace with MotionSim.Simulator later
+
+        // Command center "Clear Requests" button → controller
+        commandCenterPanel.setOnClearRequests(controller::clearAllRequests);
     }
 
     private HBox buildLayout() {
@@ -80,7 +97,15 @@ public class DemoSystemApp extends Application {
         return root;
     }
 
+    private void showCommandCenterWindow() {
+        Stage ccStage = new Stage();
+        ccStage.setTitle("Elevator Command Center");
+        ccStage.setScene(new Scene(commandCenterPanel, 360, 400));
+        ccStage.show();
+    }
+
     public static void main(String[] args) {
         launch();
     }
 }
+
