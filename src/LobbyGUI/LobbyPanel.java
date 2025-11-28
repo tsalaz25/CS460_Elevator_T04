@@ -10,9 +10,7 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
-
-// TODO TOMAS: when you add a lobby door indicator, you will likely need:
-// import CabinGUI.DoorState;
+import CabinGUI.DoorState;
 
 /**
  * Lobby panel with:
@@ -28,12 +26,6 @@ import javafx.util.Duration;
  * Standalone demo mode (systemMode = false):
  *   - Timeline simulates movement floor-by-floor.
  *
- * TODO DANIEL:
- *   - Implement fire button styles and behavior (toggle, callback).
- *
- * TODO TOMAS:
- *   - Add a door-state label/badge if you want the lobby to show door OPEN/CLOSED.
- *   - Hook it up to controller once door logic is ready.
  */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
@@ -58,10 +50,8 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
     private boolean fireActive = false;  // TODO DANIEL: track fire UI toggle
 
-    // TODO TOMAS:
-    // If you add a door indicator:
-    // private DoorState doorState = DoorState.CLOSED;
-    // private final Label doorBadge = new Label("CLOSED");
+    private DoorState doorState = DoorState.CLOSED;
+    private final Label doorBadge = new Label("CLOSED");
 
     // ------------------------------------------------------------
     // Controls
@@ -89,6 +79,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         travel.setCycleCount(Timeline.INDEFINITE);
         refreshInteractivity();
         applyStyles();
+        applyDoorStyles();  //Show Correct Images
         applyFireStyles();  // ensure fire button starts in the correct visual state
     }
 
@@ -98,6 +89,12 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     public void setOnUpPressed(Runnable r)   { this.onUpPressed = r; }
     public void setOnDownPressed(Runnable r) { this.onDownPressed = r; }
     public void setSystemMode(boolean v)     { this.systemMode = v; }
+
+    @Override
+    public void setDoorState(DoorState state){
+        this doorState = state;
+        applyDoorStyles();
+    }
 
     // Fire callbacks for controller wiring
     @Override
@@ -192,20 +189,16 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         HBox btnRow = new HBox(12, upBtn, downBtn);
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
-
         // TODO DANIEL:
         // Style fireBtn and decide where it goes visually.
         fireBtn.setPrefWidth(160);
 
         VBox controls = new VBox(8, selectorRow, btnRow, fireBtn);
         controls.setAlignment(Pos.CENTER);
+        HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
+        doorRow.setAlignment(Pos.CENTER);
+        card.getChildren().addAll(title, display, controls, doorRow);
 
-        // TODO TOMAS:
-        // If you add a door badge, add it here as well.
-        // Example:
-        // HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
-        // doorRow.setAlignment(Pos.CENTER);
-        // card.getChildren().addAll(title, display, controls, doorRow);
 
         card.getChildren().addAll(title, display, controls);
         setCenter(card);
@@ -343,8 +336,17 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         }
     }
 
-    // TODO TOMAS:
-    // Similar helper for door badge styling, once you add it.
+    private void applyDoorStyles() {
+        String badgeStyle = "-fx-padding:4 10; -fx-background-radius:9999; -fx-font-weight:700;";
+        if (doorState == DoorState.OPEN) {
+            doorBadge.setText("OPEN");
+            doorBadge.setStyle(badgeStyle + "-fx-background-color:#d1fae5; -fx-text-fill:#065f46;");
+        } else {
+            doorBadge.setText("CLOSED");
+            doorBadge.setStyle(badgeStyle + "-fx-background-color:#fee2e2; -fx-text-fill:#7f1d1d;");
+        }
+
+    }
 
     private void refreshInteractivity() {
         // Only disable controls while the elevator is moving in system mode

@@ -4,8 +4,7 @@ import Wiring.EventBus;
 import Wiring.Topics;
 import LobbyGUI.LobbyPanelAPI;
 import CabinGUI.CabinPanelAPI;
-// TODO TOMAS: you will likely need this for door state when you implement doors.
-// import CabinGUI.DoorState;
+import CabinGUI.DoorState;
 
 import javafx.application.Platform;
 
@@ -33,11 +32,7 @@ import java.util.stream.Collectors;
  *      * track a fireMode flag.
  *      * override normal scheduling when fireMode is true (recall to floor 0, open doors, etc.).
  *      * subscribe to a fire-topic (e.g., UI_FIRE_TOGGLED) and control fireMode from there.
- *
- * TODO TOMAS:
- *  - Implement door behavior:
- *      * doors closed while moving, open on arrival at a served floor.
- *      * coordinate CabinPanel door state (and optionally Lobby door display).
+
  */
 public class ElevatorController {
 
@@ -49,6 +44,7 @@ public class ElevatorController {
     private int currentFloor = 0;
     private int targetFloor = 0;
     private boolean moving = false;
+    private DoorState doorState = DoorState.CLOSED;
 
     // Fire recall state
     private boolean fireMode = false;
@@ -114,20 +110,18 @@ public class ElevatorController {
                 if (!moving && currentFloor != 0) {
                     targetFloor = 0;
                     moving = true;
-                    // TODO TOMAS: close doors before moving once you implement door logic.
-                    // closeDoors();
+                    closeDoors();
                     bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
                     pushUi();
                 } else if (!moving && currentFloor == 0) {
                     // Already at recall floor: just sit here with doors open in fire mode.
-                    // TODO TOMAS: open doors once you implement door logic.
-                    // openDoors();
+                    openDoors();
                     pushUi();
                 }
             } else {
                 // Leaving fire mode:
                 // 1) Close doors (once Tomas has door helpers)
-                // closeDoors();
+                closeDoors();
 
                 // 2) Resume normal scheduling
                 schedule();
@@ -149,18 +143,14 @@ public class ElevatorController {
                 // Fire recall arrival at floor 0
                 if (fireMode && currentFloor == 0) {
                     // In fire mode we want to sit at 0 with doors open and ignore normal scheduling.
-                    // TODO TOMAS: open doors once you implement door logic.
-                    // openDoors();
+                    openDoors();
                     pushUi();
                     return;
                 }
 
                 // Normal stop: clear served requests
                 clearServed(currentFloor);
-
-                // TODO TOMAS:
-                // Call openDoors() here once you implement it.
-                // openDoors();
+                openDoors();
 
                 pushUi();
                 // Only normal mode should reschedule
@@ -186,14 +176,12 @@ public class ElevatorController {
             if (!moving && currentFloor != 0) {
                 targetFloor = 0;
                 moving = true;
-                // TODO TOMAS: close doors before moving once you implement door logic.
-                // closeDoors();
+                closeDoors();
                 bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
                 pushUi();
             } else if (!moving && currentFloor == 0) {
                 // Already at recall floor; just keep doors open and do nothing.
-                // TODO TOMAS: open doors once you implement door logic.
-                // openDoors();
+                openDoors();
                 pushUi();
             }
             return;
@@ -222,8 +210,7 @@ public class ElevatorController {
         if (next == currentFloor) {
             log("Serving current floor " + currentFloor + " without moving");
             clearServed(currentFloor);
-            // TODO TOMAS: openDoors() here when serving current floor without moving.
-            // openDoors();
+            openDoors();
             pushUi();
             // There might still be other requests; check again
             next = pickNearest();
@@ -237,9 +224,7 @@ public class ElevatorController {
         // Normal case: move to the selected next floor
         targetFloor = next;
         moving = true;
-
-        // TODO TOMAS: close doors before moving once you implement door logic.
-        // closeDoors();
+        closeDoors();
 
         log("schedule(): dispatching to " + targetFloor);
         bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
@@ -295,7 +280,7 @@ public class ElevatorController {
         });
     }
 
-    // ====== DOOR HELPERS (TODO TOMAS) ======
+    // ====== DOOR HELPERS ======
     // These are placeholders for Tomas to implement. They are NOT called yet
     // (calls above are commented out as TODOs).
     //
@@ -304,23 +289,17 @@ public class ElevatorController {
     //  - call cabin.setDoorState(DoorState.OPEN/CLOSED)
     //  - optionally also add a lobby door indicator and update that too.
 
-    // private void openDoors() {
-    //     // TODO TOMAS:
-    //     // Example:
-    //     // Platform.runLater(() -> {
-    //     //     cabin.setDoorState(DoorState.OPEN);
-    //     //     // lobby.setDoorState(DoorState.OPEN); // if you add this to LobbyPanel
-    //     // });
-    // }
+    private void openDoors(){
+        if (doorState == DoorState.OPEN) { return; }
+        doorState = DoorState.OPEN;
+        Platform.runLater(() -> cabin.setDoorState(DoorState.OPEN));
+    }
 
-    // private void closeDoors() {
-    //     // TODO TOMAS:
-    //     // Example:
-    //     // Platform.runLater(() -> {
-    //     //     cabin.setDoorState(DoorState.CLOSED);
-    //     //     // lobby.setDoorState(DoorState.CLOSED);
-    //     // });
-    // }
+    private void closeDoors(){
+        if (doorState == DoorState.CLOSED) { return; }
+        doorState = DoorState.CLOSED;
+        Platform.runLater(() -> cabin.setDoorState(DoorState.CLOSED));
+    }
 
     // ====== UI UPDATES ======
     private void pushUi() {
@@ -338,6 +317,10 @@ public class ElevatorController {
                 direction = "IDLE";
             }
             cabin.setDirection(direction);
+            cabin.setDoorState(doorState);
+            //Lobby Indicator
+            lobby.setDoorState(doorState);
+
 
             // Lobby only needs to know if we are moving (for disabling buttons)
             lobby.setMoving(moving);

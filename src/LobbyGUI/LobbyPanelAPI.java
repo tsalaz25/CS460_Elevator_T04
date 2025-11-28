@@ -1,5 +1,7 @@
 package LobbyGUI;
 
+import CabinGUI.DoorState;
+
 public interface LobbyPanelAPI {
 
     // Hall-call lamp / query API
@@ -14,6 +16,9 @@ public interface LobbyPanelAPI {
 
     boolean isMoving();
     void setMoving(boolean moving);
+
+    //Door Indicator
+    void setDoorState(DoorState doorState);
 
     // Fire-alarm support
     void setFireActive(boolean active);
