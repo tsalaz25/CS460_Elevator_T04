@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MockSim {
 
-    private static final long TICK_MS = 750L;
+    private static final long TICK_MS = 1200L;
     private final EventBus bus;
     private final ScheduledExecutorService scheduler;
     private final Object stateLock = new Object();

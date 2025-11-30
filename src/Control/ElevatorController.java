@@ -280,20 +280,27 @@ public class ElevatorController {
      */
     private void animateClosingThenDispatch() {
         Platform.runLater(() -> {
-            // Step 1: transition to CLOSING / half-open image
+            // Step 1: start closing (half-open image)
             doorState = DoorState.CLOSING;
             pushUi();
 
-            PauseTransition pt = new PauseTransition(Duration.seconds(0.1));
-            pt.setOnFinished(ev -> {
+            PauseTransition closing = new PauseTransition(Duration.seconds(0.1));  // closing animation
+            closing.setOnFinished(ev -> {
+
                 // Step 2: fully closed
                 doorState = DoorState.CLOSED;
                 pushUi();
 
-                log("schedule(): dispatching to " + targetFloor);
-                bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
+                // Step 3: wait extra 1 second before moving
+                PauseTransition delay = new PauseTransition(Duration.seconds(1.0));
+                delay.setOnFinished(ev2 -> {
+                    log("dispatching after close delay to " + targetFloor);
+                    bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
+                });
+                delay.play();
+
             });
-            pt.play();
+            closing.play();
         });
     }
 
