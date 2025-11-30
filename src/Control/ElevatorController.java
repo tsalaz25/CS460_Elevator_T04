@@ -8,6 +8,8 @@ import CommandCenterGUI.CommandCenterPanelAPI;
 import CabinGUI.DoorState;
 
 import javafx.application.Platform;
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -16,24 +18,19 @@ import java.util.stream.Collectors;
 /**
  * ElevatorController
  *
- * Responsibilities (current behavior):
+ * Responsibilities:
  *  - Subscribe to UI events:
  *      UI_HALL_CALL_UP(floor)
  *      UI_HALL_CALL_DOWN(floor)
  *      UI_CABIN_SELECT(floor)
+ *      UI_FIRE_TOGGLED(boolean)
  *  - Track pending requests in three sets.
- *  - Maintain currentFloor, targetFloor, moving flag.
- *  - On each schedule(), pick the nearest pending request and issue CTRL_CMD_MOVE_TO(target).
+ *  - Maintain currentFloor, targetFloor, moving flag, fireMode.
+ *  - On each schedule(), pick the nearest pending request and issue CTRL_CMD_MOVE_TO(target),
+ *    with a short door-closing animation delay before motion.
  *  - On SIM_FLOOR_TICK(floor), update currentFloor, detect arrival when floor == target.
- *  - On arrival, clear requests for that floor, reset lobby lamps, and reschedule if needed.
- *  - Push basic UI state into Cabin/Lobby via their APIs.
- *
- * Fire mode behavior:
- *  - fireMode flag is toggled by UI_FIRE_TOGGLED.
- *  - When fireMode is active:
- *      * all pending requests are cleared
- *      * elevator recalls to floor 0 and stays there with doors open
- *      * normal scheduling is suspended
+ *  - On arrival, clear requests for that floor, animate doors opening, dwell briefly, then reschedule.
+ *  - Push UI state into Cabin/Lobby/CommandCenter via their APIs.
  */
 public class ElevatorController {
 
@@ -46,7 +43,7 @@ public class ElevatorController {
     private int currentFloor = 0;
     private int targetFloor = 0;
     private boolean moving = false;
-    private DoorState doorState = DoorState.CLOSED;
+    private DoorState doorState = DoorState.OPEN;
 
     // Fire recall state
     private boolean fireMode = false;
@@ -60,14 +57,8 @@ public class ElevatorController {
     public ElevatorController(EventBus bus,
                               LobbyPanelAPI lobby,
                               CabinPanelAPI cabin) {
-        this.bus = bus;
-        this.lobby = lobby;
-        this.cabin = cabin;
-        this.commandCenter = null;
-
-        wireSubscriptions();
-        pushUi(); // initial state
-        log("Controller booted (no command center)");
+        this(bus, lobby, cabin, null);
+        System.out.println("[CTRL] Controller booted (no command center) | state " + stateSummary());
     }
 
     public ElevatorController(EventBus bus,
@@ -81,7 +72,7 @@ public class ElevatorController {
 
         wireSubscriptions();
         pushUi(); // initial state
-        log("Controller booted (with command center)");
+        System.out.println("[CTRL] Controller booted (with command center) | state " + stateSummary());
     }
 
     // ====== BUS SUBSCRIPTIONS ======
@@ -117,30 +108,15 @@ public class ElevatorController {
             fireMode = active;
             log("Fire mode toggled -> " + (fireMode ? "ACTIVE" : "OFF"));
 
+            // Clear normal requests when entering fire mode
             if (fireMode) {
-                // 1) Clear normal requests
                 hallUp.clear();
                 hallDown.clear();
                 cabinSel.clear();
-
-                // 2) If not at floor 0, recall to 0
-                if (!moving && currentFloor != 0) {
-                    targetFloor = 0;
-                    moving = true;
-                    closeDoors();
-                    bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
-                    pushUi();
-                } else if (!moving && currentFloor == 0) {
-                    // Already at recall floor: just sit here with doors open in fire mode.
-                    openDoors();
-                    pushUi();
-                }
-            } else {
-                // Leaving fire mode:
-                // Close doors and resume normal scheduling
-                closeDoors();
-                schedule();
             }
+
+            // Let schedule() decide recall / behavior based on fireMode flag
+            schedule();
         });
 
         // Simulator reports a floor tick (we moved one floor)
@@ -157,20 +133,20 @@ public class ElevatorController {
                 // Fire recall arrival at floor 0
                 if (fireMode && currentFloor == 0) {
                     // In fire mode we want to sit at 0 with doors open and ignore normal scheduling.
-                    openDoors();
-                    pushUi();
+                    animateOpeningThen(null);
                     return;
                 }
 
-                // Normal stop: clear served requests
+                // Normal stop: clear served requests, open doors and dwell briefly
                 clearServed(currentFloor);
-                openDoors();
-
-                pushUi();
-                // Only normal mode should reschedule
-                schedule();
+                animateOpeningThen(() -> {
+                    // dwell with doors open, then consider next request
+                    PauseTransition dwell = new PauseTransition(Duration.seconds(0.5));
+                    dwell.setOnFinished(ev2 -> schedule());
+                    dwell.play();
+                });
             } else {
-                // Just a passing floor
+                // Just a passing floor: update UI only
                 pushUi();
             }
         });
@@ -190,13 +166,10 @@ public class ElevatorController {
             if (!moving && currentFloor != 0) {
                 targetFloor = 0;
                 moving = true;
-                closeDoors();
-                bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
-                pushUi();
+                animateClosingThenDispatch();
             } else if (!moving && currentFloor == 0) {
-                // Already at recall floor; just keep doors open and do nothing.
-                openDoors();
-                pushUi();
+                // Already at recall floor; keep doors open.
+                animateOpeningThen(null);
             }
             return;
         }
@@ -223,25 +196,20 @@ public class ElevatorController {
         if (next == currentFloor) {
             log("Serving current floor " + currentFloor + " without moving");
             clearServed(currentFloor);
-            openDoors();
-            pushUi();
-            // There might still be other requests; check again
-            next = pickNearest();
-            if (next == null || next == currentFloor) {
-                targetFloor = currentFloor;
-                pushUi();
-                return;
-            }
+
+            // Doors may already be open; ensure they are, then dwell and re-evaluate.
+            animateOpeningThen(() -> {
+                PauseTransition dwell = new PauseTransition(Duration.seconds(0.5));
+                dwell.setOnFinished(ev2 -> schedule());
+                dwell.play();
+            });
+            return;
         }
 
         // Normal case: move to the selected next floor
         targetFloor = next;
         moving = true;
-        closeDoors();
-
-        log("schedule(): dispatching to " + targetFloor);
-        bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
-        pushUi();
+        animateClosingThenDispatch();
     }
 
     // Pick the nearest floor with any kind of pending request
@@ -304,17 +272,53 @@ public class ElevatorController {
         pushUi();
     }
 
-    // ====== DOOR HELPERS ======
-    private void openDoors() {
-        if (doorState == DoorState.OPEN) { return; }
-        doorState = DoorState.OPEN;
-        Platform.runLater(() -> cabin.setDoorState(DoorState.OPEN));
+    // ====== DOOR ANIMATIONS ======
+
+    /**
+     * Animate doors closing (OPEN/OPENING -> CLOSING -> CLOSED) and then
+     * dispatch the move command to the simulator after a short delay.
+     */
+    private void animateClosingThenDispatch() {
+        Platform.runLater(() -> {
+            // Step 1: transition to CLOSING / half-open image
+            doorState = DoorState.CLOSING;
+            pushUi();
+
+            PauseTransition pt = new PauseTransition(Duration.seconds(0.1));
+            pt.setOnFinished(ev -> {
+                // Step 2: fully closed
+                doorState = DoorState.CLOSED;
+                pushUi();
+
+                log("schedule(): dispatching to " + targetFloor);
+                bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
+            });
+            pt.play();
+        });
     }
 
-    private void closeDoors() {
-        if (doorState == DoorState.CLOSED) { return; }
-        doorState = DoorState.CLOSED;
-        Platform.runLater(() -> cabin.setDoorState(DoorState.CLOSED));
+    /**
+     * Animate doors opening (CLOSED/CLOSING -> OPENING -> OPEN).
+     * Optionally run a callback after the doors are fully open.
+     */
+    private void animateOpeningThen(Runnable afterOpen) {
+        Platform.runLater(() -> {
+            // Step 1: opening / half-open image
+            doorState = DoorState.OPENING;
+            pushUi();
+
+            PauseTransition pt = new PauseTransition(Duration.seconds(0.1));
+            pt.setOnFinished(ev -> {
+                // Step 2: fully open
+                doorState = DoorState.OPEN;
+                pushUi();
+
+                if (afterOpen != null) {
+                    afterOpen.run();
+                }
+            });
+            pt.play();
+        });
     }
 
     // ====== UI UPDATES ======
@@ -324,15 +328,15 @@ public class ElevatorController {
             cabin.setCurrentFloor(currentFloor);
 
             // Direction for cabin display
-            String direction;
+            String directionStr;
             if (moving && targetFloor > currentFloor) {
-                direction = "UP";
+                directionStr = "UP";
             } else if (moving && targetFloor < currentFloor) {
-                direction = "DOWN";
+                directionStr = "DOWN";
             } else {
-                direction = "IDLE";
+                directionStr = "IDLE";
             }
-            cabin.setDirection(direction);
+            cabin.setDirection(directionStr);
             cabin.setDoorState(doorState);
 
             // Lobby Indicator
@@ -347,7 +351,7 @@ public class ElevatorController {
                         moving || !hallUp.isEmpty() || !hallDown.isEmpty() || !cabinSel.isEmpty();
                 commandCenter.setTargetFloor(targetFloor, hasTarget);
                 commandCenter.setMoving(moving);
-                commandCenter.setDirection(direction);
+                commandCenter.setDirection(directionStr);
                 commandCenter.setDoorState(doorState);
                 commandCenter.setFireMode(fireMode);
 

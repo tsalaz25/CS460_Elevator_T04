@@ -9,12 +9,12 @@ import javafx.stage.Stage;
 import Wiring.EventBus;
 import Wiring.InMemoryEventBus;
 import Wiring.Topics;
-import Sim.MockSim;
 import Control.ElevatorController;
 
 import LobbyGUI.LobbyPanel;
 import CabinGUI.CabinPanel;
 import CommandCenterGUI.CommandCenterPanel;
+import Sim.MockSim;   // <<-- restore this
 
 /**
  * System demo:
@@ -35,7 +35,7 @@ public class DemoSystemApp extends Application {
     private CommandCenterPanel commandCenterPanel;
 
     private ElevatorController controller;
-    private MockSim simulator;
+    private MockSim simulator;   // <<-- restore field
 
     @Override
     public void start(Stage stage) {
@@ -84,7 +84,9 @@ public class DemoSystemApp extends Application {
 
     private void bootstrapDomainComponents() {
         controller = new ElevatorController(bus, lobbyPanel, cabinPanel, commandCenterPanel);
-        simulator = new MockSim(bus); // replace with MotionSim.Simulator later
+
+        // Restore simulator so CTRL_CMD_MOVE_TO actually produces floor ticks
+        simulator = new MockSim(bus);   // <<-- this was missing
 
         // Command center "Clear Requests" button → controller
         commandCenterPanel.setOnClearRequests(controller::clearAllRequests);
