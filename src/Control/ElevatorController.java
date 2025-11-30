@@ -141,7 +141,7 @@ public class ElevatorController {
                 clearServed(currentFloor);
                 animateOpeningThen(() -> {
                     // dwell with doors open, then consider next request
-                    PauseTransition dwell = new PauseTransition(Duration.seconds(0.5));
+                    PauseTransition dwell = new PauseTransition(Duration.seconds(5.0));
                     dwell.setOnFinished(ev2 -> schedule());
                     dwell.play();
                 });

@@ -188,27 +188,38 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        // Door image view
+        // ------------------------------
+        // Door Image (Base Layer)
+        // ------------------------------
         if (cabinClosedImg != null) {
             cabinView = new ImageView(cabinClosedImg);
         } else {
             cabinView = new ImageView();
         }
         cabinView.setPreserveRatio(true);
-        cabinView.setFitWidth(260); // tweak as needed
+        cabinView.setFitWidth(260);
 
-        display.setMinWidth(120);
+        // ------------------------------
+        // Floor Display (Overlay Layer)
+        // ------------------------------
         display.setAlignment(Pos.CENTER);
         display.setStyle(
-                "-fx-background-color:black;" +
+                "-fx-background-color: transparent;" +
                         "-fx-text-fill:#ff4545;" +
-                        "-fx-font-family:'Consolas','Courier New',monospace;" +
-                        "-fx-font-size:40;" +
-                        "-fx-padding:8 14;" +
-                        "-fx-background-radius:8;" +
-                        "-fx-border-color:#111827; -fx-border-radius:8; -fx-border-width:1;"
+                        "-fx-font-family:'Consolas','Courier New', monospace;" +
+                        "-fx-font-size:20;" +
+                        "-fx-padding:0;"
         );
+        display.setMouseTransparent(true); // Do not intercept clicks
 
+        // Stack door image + floor number
+        StackPane doorStack = new StackPane(cabinView, display);
+        doorStack.setAlignment(Pos.TOP_CENTER);
+        StackPane.setMargin(display, new Insets(28, 95, 0, 0)); // <-- adjust number down from top
+
+        // ------------------------------
+        // Badges + Floor Buttons
+        //------------------------------
         HBox badgeRow = new HBox(10, dirBadge, doorBadge);
         badgeRow.setAlignment(Pos.CENTER);
 
@@ -216,10 +227,11 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
         floorGrid.setVgap(8);
         floorGrid.setAlignment(Pos.CENTER);
 
-        // Compose: title → door image → display → badges → buttons
-        card.getChildren().addAll(title, cabinView, display, badgeRow, floorGrid);
+        // Compose: title → overlaid door image → badges → buttons
+        card.getChildren().setAll(title, doorStack, badgeRow, floorGrid);
         setCenter(card);
     }
+
 
     private void loadDoorImages() {
         cabinClosedImg = loadImage("/cabin/cabin_closed.png");
