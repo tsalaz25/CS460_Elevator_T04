@@ -15,6 +15,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
+import javax.sound.sampled.Clip;
+import Audio.Sfx;
+
 /**
  * ElevatorController
  *
@@ -52,6 +55,12 @@ public class ElevatorController {
     private final Set<Integer> hallUp   = new ConcurrentSkipListSet<>();
     private final Set<Integer> hallDown = new ConcurrentSkipListSet<>();
     private final Set<Integer> cabinSel = new ConcurrentSkipListSet<>();
+
+    private final Clip fireLoop      = Sfx.FIRE_LOOP;
+    private final Clip moveLoop      = Sfx.ELEVATOR_LOOP;
+    private final Clip moveStartClip = Sfx.ELEVATOR_START;
+    private final Clip doorCloseClip = Sfx.DOOR_CLOSE;
+    private final Clip arriveBell    = Sfx.ELEV_BELL;
 
     // ====== CONSTRUCTION ======
     public ElevatorController(EventBus bus,
@@ -108,11 +117,17 @@ public class ElevatorController {
             fireMode = active;
             log("Fire mode toggled -> " + (fireMode ? "ACTIVE" : "OFF"));
 
-            // Clear normal requests when entering fire mode
             if (fireMode) {
+                // Start fire alarm loop
+                Sfx.loop(fireLoop);
+
+                // Clear normal requests when entering fire mode
                 hallUp.clear();
                 hallDown.clear();
                 cabinSel.clear();
+            } else {
+                // Stop fire alarm when leaving fire mode
+                Sfx.stop(fireLoop);
             }
 
             // Let schedule() decide recall / behavior based on fireMode flag
@@ -130,17 +145,17 @@ public class ElevatorController {
                 moving = false;
                 log("Arrived at target " + currentFloor);
 
-                // Fire recall arrival at floor 0
+                // Stop movement loop sound & ding
+                Sfx.stop(moveLoop);
+                Sfx.play(arriveBell);
+
                 if (fireMode && currentFloor == 0) {
-                    // In fire mode we want to sit at 0 with doors open and ignore normal scheduling.
                     animateOpeningThen(null);
                     return;
                 }
 
-                // Normal stop: clear served requests, open doors and dwell briefly
                 clearServed(currentFloor);
                 animateOpeningThen(() -> {
-                    // dwell with doors open, then consider next request
                     PauseTransition dwell = new PauseTransition(Duration.seconds(5.0));
                     dwell.setOnFinished(ev2 -> schedule());
                     dwell.play();
@@ -280,11 +295,12 @@ public class ElevatorController {
      */
     private void animateClosingThenDispatch() {
         Platform.runLater(() -> {
-            // Step 1: start closing (half-open image)
+            // Step 1: start closing (half-open image) + door closing sound
             doorState = DoorState.CLOSING;
+            Sfx.play(doorCloseClip);
             pushUi();
 
-            PauseTransition closing = new PauseTransition(Duration.seconds(0.1));  // closing animation
+            PauseTransition closing = new PauseTransition(Duration.seconds(0.10));  // visible closing
             closing.setOnFinished(ev -> {
 
                 // Step 2: fully closed
@@ -295,10 +311,16 @@ public class ElevatorController {
                 PauseTransition delay = new PauseTransition(Duration.seconds(1.0));
                 delay.setOnFinished(ev2 -> {
                     log("dispatching after close delay to " + targetFloor);
+
+                    // Play one-shot start clip
+                    Sfx.play(moveStartClip);
+                    // Start continuous movement loop
+                    Sfx.loop(moveLoop);
+
+                    // Tell simulator to move
                     bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
                 });
                 delay.play();
-
             });
             closing.play();
         });
