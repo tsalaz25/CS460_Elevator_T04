@@ -10,6 +10,7 @@ public final class Sfx {
     public static final Clip ELEVATOR_START = load("elevator_start1.wav");
     public static final Clip ELEV_BELL      = load("elevbell1.wav");
     public static final Clip DOOR_CLOSE     = load("hall_elev_door.wav");
+    public static final Clip DENY = load("suit_denydevice.wav");
 
     private Sfx() {}
 

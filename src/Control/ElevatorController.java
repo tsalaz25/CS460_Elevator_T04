@@ -90,6 +90,13 @@ public class ElevatorController {
         // Hall Up call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_UP, e -> {
             int f = (int) e.payload();
+
+            if (fireMode) {
+                // In fire mode, ignore normal hall calls (UI can still play a denied sound)
+                log("Ignoring Hall UP @" + f + " because fire mode is ACTIVE");
+                return;
+            }
+
             log("Hall UP request received @ floor " + f);
             hallUp.add(f);
             schedule();
@@ -98,6 +105,12 @@ public class ElevatorController {
         // Hall Down call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> {
             int f = (int) e.payload();
+
+            if (fireMode) {
+                log("Ignoring Hall DOWN @" + f + " because fire mode is ACTIVE");
+                return;
+            }
+
             log("Hall DOWN request received @ floor " + f);
             hallDown.add(f);
             schedule();
@@ -106,6 +119,12 @@ public class ElevatorController {
         // Cabin floor selection
         bus.subscribe(Topics.UI_CABIN_SELECT, e -> {
             int f = (int) e.payload();
+
+            if (fireMode) {
+                log("Ignoring cabin selection " + f + " because fire mode is ACTIVE");
+                return;
+            }
+
             log("Cabin floor selected: " + f);
             cabinSel.add(f);
             schedule();
@@ -367,10 +386,13 @@ public class ElevatorController {
             }
             cabin.setDirection(directionStr);
             cabin.setDoorState(doorState);
+            cabin.setFireActive(fireMode);
 
             // Lobby Indicator
             lobby.setDoorState(doorState);
             lobby.setMoving(moving);
+
+            lobby.setFireActive(fireMode);
 
             // --- Command Center (if present) ---
             if (commandCenter != null) {

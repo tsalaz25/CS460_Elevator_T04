@@ -32,6 +32,7 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
     private int currentFloor = 0;
     private String direction = "IDLE";
     private DoorState doorState = DoorState.CLOSED;
+    private boolean fireActive = false;
 
     // ----- Controls -----
     private final Label title    = new Label("Cabin Panel");
@@ -51,6 +52,10 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
         buildUI();
         buildFloorButtons(0, 10);
         refreshBadges();
+    }
+
+    public void setFireActive(boolean active) {
+        this.fireActive = active;
     }
 
     // ============================================================
@@ -205,7 +210,7 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
         display.setAlignment(Pos.CENTER);
         display.setStyle(
                 "-fx-background-color: transparent;" +
-                        "-fx-text-fill:#ff4545;" +
+                        "-fx-text-fill:#ffffff;" +
                         "-fx-font-family:'Consolas','Courier New', monospace;" +
                         "-fx-font-size:20;" +
                         "-fx-padding:0;"
@@ -257,9 +262,20 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
             Button b = new Button(Integer.toString(f));
             b.setPrefWidth(56);
             int finalF = f;
+
             b.setOnAction(e -> {
-                if (onFloorSelected != null) onFloorSelected.accept(finalF);
+                // ----- FIRE MODE BLOCKS REQUESTS -----
+                if (fireActive) {
+                    Audio.Sfx.play(Audio.Sfx.DENY);   // <-- plays suit_denydevice.wav
+                    return;                           // <-- do NOT send request to controller
+                }
+
+                // ----- NORMAL OPERATION -----
+                if (onFloorSelected != null) {
+                    onFloorSelected.accept(finalF);
+                }
             });
+
             b.setStyle("-fx-font-weight:700; -fx-background-radius:10;");
             floorGrid.add(b, n % cols, n / cols);
             n++;

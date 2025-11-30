@@ -18,6 +18,7 @@ public interface CabinPanelAPI {
 
     void setCurrentFloor(int f);
     void setDirection(String s);
+    void setFireActive(boolean active);
 }
 
 /*

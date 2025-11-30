@@ -64,6 +64,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private final Label display = new Label("Floor 0");
     private final Label title   = new Label("Lobby Panel");
 
+
     // ------------------------------------------------------------
     // Standalone demo travel
     // ------------------------------------------------------------
