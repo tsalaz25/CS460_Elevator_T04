@@ -61,6 +61,7 @@ public class ElevatorController {
     private final Clip moveStartClip = Sfx.ELEVATOR_START;
     private final Clip doorCloseClip = Sfx.DOOR_CLOSE;
     private final Clip arriveBell    = Sfx.ELEV_BELL;
+    private final Clip deny = Sfx.DENY;
 
     // ====== CONSTRUCTION ======
     public ElevatorController(EventBus bus,
@@ -94,6 +95,7 @@ public class ElevatorController {
             if (fireMode) {
                 // In fire mode, ignore normal hall calls (UI can still play a denied sound)
                 log("Ignoring Hall UP @" + f + " because fire mode is ACTIVE");
+                Sfx.play(deny);
                 return;
             }
 
@@ -108,6 +110,7 @@ public class ElevatorController {
 
             if (fireMode) {
                 log("Ignoring Hall DOWN @" + f + " because fire mode is ACTIVE");
+                Sfx.play(deny);
                 return;
             }
 
@@ -121,7 +124,8 @@ public class ElevatorController {
             int f = (int) e.payload();
 
             if (fireMode) {
-                log("Ignoring cabin selection " + f + " because fire mode is ACTIVE");
+                log("Ignoring resources.cabin selection " + f + " because fire mode is ACTIVE");
+                Sfx.play(deny);
                 return;
             }
 
@@ -370,12 +374,11 @@ public class ElevatorController {
     }
 
     // ====== UI UPDATES ======
-    private void pushUi() {
+    public void pushUi() {
         Platform.runLater(() -> {
-            // Cabin reflects car position
+            // ---- CABIN ----
             cabin.setCurrentFloor(currentFloor);
 
-            // Direction for cabin display
             String directionStr;
             if (moving && targetFloor > currentFloor) {
                 directionStr = "UP";
@@ -386,27 +389,32 @@ public class ElevatorController {
             }
             cabin.setDirection(directionStr);
             cabin.setDoorState(doorState);
-            cabin.setFireActive(fireMode);
 
-            // Lobby Indicator
-            lobby.setDoorState(doorState);
+            // ---- LOBBY ----
+            // Lobby represents whatever floor its dropdown is on:
+            int lobbyFloor = lobby.getTargetFloor();
+
+            // Only show the "real" door state if the car is actually at this lobby's floor.
+            DoorState lobbyDoorState =
+                    (currentFloor == lobbyFloor) ? doorState : DoorState.CLOSED;
+
+            lobby.setDoorState(lobbyDoorState);
             lobby.setMoving(moving);
-
             lobby.setFireActive(fireMode);
 
-            // --- Command Center (if present) ---
+            // ---- COMMAND CENTER (if present) ----
             if (commandCenter != null) {
                 commandCenter.setCurrentFloor(currentFloor);
-                // Treat having any pending work or moving as "has target"
+
                 boolean hasTarget =
                         moving || !hallUp.isEmpty() || !hallDown.isEmpty() || !cabinSel.isEmpty();
+
                 commandCenter.setTargetFloor(targetFloor, hasTarget);
                 commandCenter.setMoving(moving);
                 commandCenter.setDirection(directionStr);
                 commandCenter.setDoorState(doorState);
                 commandCenter.setFireMode(fireMode);
 
-                // Send copies so UI can't mutate internal sets
                 commandCenter.setPendingHallUp(Set.copyOf(hallUp));
                 commandCenter.setPendingHallDown(Set.copyOf(hallDown));
                 commandCenter.setPendingCabin(Set.copyOf(cabinSel));

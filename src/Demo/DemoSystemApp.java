@@ -90,6 +90,7 @@ public class DemoSystemApp extends Application {
 
         // Command center "Clear Requests" button → controller
         commandCenterPanel.setOnClearRequests(controller::clearAllRequests);
+        lobbyPanel.setOnViewingFloorChanged(controller::pushUi);
     }
 
     private HBox buildLayout() {

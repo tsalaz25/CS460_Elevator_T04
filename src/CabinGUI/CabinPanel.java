@@ -239,9 +239,9 @@ public class CabinPanel extends BorderPane implements CabinPanelAPI {
 
 
     private void loadDoorImages() {
-        cabinClosedImg = loadImage("/cabin/cabin_closed.png");
-        cabinHalfImg   = loadImage("/cabin/cabin_half.png");
-        cabinOpenImg   = loadImage("/cabin/cabin_open.png");
+        cabinClosedImg = loadImage("/resources/cabin/cabin_closed.png");
+        cabinHalfImg   = loadImage("/resources/cabin/cabin_half.png");
+        cabinOpenImg   = loadImage("/resources/cabin/cabin_open.png");
     }
 
     private Image loadImage(String path) {

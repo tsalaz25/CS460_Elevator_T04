@@ -7,17 +7,21 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 import CabinGUI.DoorState;
+
+import java.net.URL;
 
 /**
  * Lobby panel with:
  *  - Viewing-floor dropdown (0..10)
  *  - "Floor X" label showing which floor this lobby represents
  *  - Up/Down buttons that light when pressed
- *  - Fire button (UI only; controller will implement behavior)
+ *  - Fire button (UI only; controller implements behavior)
  *
  * Integration mode (systemMode = true):
  *   - Does NOT self-move; just fires callbacks on button presses.
@@ -25,7 +29,6 @@ import CabinGUI.DoorState;
  *
  * Standalone demo mode (systemMode = false):
  *   - Timeline simulates movement floor-by-floor.
- *
  */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
@@ -34,7 +37,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // ------------------------------------------------------------
     private Runnable onUpPressed;
     private Runnable onDownPressed;
-    private Runnable onFireToggled;  // TODO DANIEL: used to notify controller
+    private Runnable onFireToggled;
 
     private boolean systemMode = true;  // true => no internal travel; UI is "dumb"
 
@@ -48,7 +51,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private int targetFloor = 0;    // "viewing floor" in system mode / demo target in demo mode
     private boolean moving = false; // used for disabling controls
 
-    private boolean fireActive = false;  // TODO DANIEL: track fire UI toggle
+    private boolean fireActive = false;
 
     private DoorState doorState = DoorState.CLOSED;
     private final Label doorBadge = new Label("CLOSED");
@@ -58,12 +61,17 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // ------------------------------------------------------------
     private final Button upBtn   = new Button("▲");
     private final Button downBtn = new Button("▼");
-    private final Button fireBtn = new Button("FIRE"); // TODO DANIEL: style and label ON/OFF
+    private final Button fireBtn = new Button("FIRE");
 
     private final ComboBox<Integer> floorDropdown = new ComboBox<>();
-    private final Label display = new Label("Floor 0");
+    private final Label display = new Label("FLOOR 0");
     private final Label title   = new Label("Lobby Panel");
 
+    // Door images
+    private Image lobbyClosedImg;
+    private Image lobbyHalfImg;
+    private Image lobbyOpenImg;
+    private ImageView lobbyDoorView;
 
     // ------------------------------------------------------------
     // Standalone demo travel
@@ -75,13 +83,14 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // Constructor
     // ============================================================
     public LobbyPanel() {
+        loadDoorImages();
         buildUI();
         wireHandlers();
         travel.setCycleCount(Timeline.INDEFINITE);
         refreshInteractivity();
         applyStyles();
-        applyDoorStyles();  //Show Correct Images
-        applyFireStyles();  // ensure fire button starts in the correct visual state
+        applyDoorStyles();
+        applyFireStyles();
     }
 
     // ============================================================
@@ -91,22 +100,49 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     public void setOnDownPressed(Runnable r) { this.onDownPressed = r; }
     public void setSystemMode(boolean v)     { this.systemMode = v; }
 
+    // ============================================================
+    // Door images
+    // ============================================================
+    private void loadDoorImages() {
+        // resources root: .../resources/lobby/...
+        lobbyClosedImg = loadImage("/resources/lobby/lobby_closed.png");
+        lobbyHalfImg   = loadImage("/resources/lobby/lobby_half.png");
+        lobbyOpenImg   = loadImage("/resources/lobby/lobby_open.png");
+    }
+
+    private Runnable onViewingFloorChanged;
+
+    public void setOnViewingFloorChanged(Runnable r) {
+        this.onViewingFloorChanged = r;
+    }
+
+
+    private Image loadImage(String path) {
+        try {
+            URL url = getClass().getResource(path);
+            if (url != null) {
+                return new Image(url.toExternalForm());
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     @Override
-    public void setDoorState(DoorState state){
+    public void setDoorState(DoorState state) {
         this.doorState = state;
         applyDoorStyles();
     }
 
+    // ============================================================
     // Fire callbacks for controller wiring
+    // ============================================================
     @Override
     public void setOnFireToggled(Runnable r) {
-        // Store the callback so the fire button can notify the controller.
         this.onFireToggled = r;
     }
 
     @Override
     public void setFireActive(boolean active) {
-        // Update local fire flag and make the UI match.
         this.fireActive = active;
         applyFireStyles();
         refreshInteractivity();
@@ -114,7 +150,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
     @Override
     public boolean isFireActive() {
-        // Reflect the current UI fire state.
         return fireActive;
     }
 
@@ -153,33 +188,40 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // ============================================================
     private void buildUI() {
         setPadding(new Insets(12));
-        setBackground(new Background(new BackgroundFill(Color.web("#f5f7fc"),
-                CornerRadii.EMPTY, Insets.EMPTY)));
+        setBackground(new Background(new BackgroundFill(
+                Color.web("#f5f7fc"), CornerRadii.EMPTY, Insets.EMPTY)));
 
         VBox card = new VBox(12);
         card.setPadding(new Insets(14));
         card.setAlignment(Pos.TOP_CENTER);
-        card.setBackground(new Background(new BackgroundFill(Color.WHITE,
-                new CornerRadii(16), Insets.EMPTY)));
-        card.setBorder(new Border(new BorderStroke(Color.web("#dde3f1"),
-                BorderStrokeStyle.SOLID, new CornerRadii(16), new BorderWidths(1))));
-        card.setStyle(card.getStyle()
-                + "; -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0.25, 0, 6);");
+        card.setBackground(new Background(new BackgroundFill(
+                Color.WHITE, new CornerRadii(16), Insets.EMPTY)));
+        card.setBorder(new Border(new BorderStroke(
+                Color.web("#dde3f1"),
+                BorderStrokeStyle.SOLID,
+                new CornerRadii(16),
+                new BorderWidths(1))));
+        card.setStyle(
+                card.getStyle()
+                        + "; -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0.25, 0, 6);");
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        display.setMinWidth(140);
+        // "Floor X" display
+        display.setMinWidth(50);
         display.setAlignment(Pos.CENTER);
         display.setStyle(
-                "-fx-background-color:white;" +
-                        "-fx-text-fill:#1f2937;" +
-                        "-fx-font-family:'Segoe UI', sans-serif;" +
-                        "-fx-font-size:24;" +
-                        "-fx-padding:10 14;" +
-                        "-fx-background-radius:10;" +
-                        "-fx-border-color:#d1d5db; -fx-border-radius:10; -fx-border-width:1;"
+                "-fx-background-color:#ecd29b;" +
+                        "-fx-text-fill:#111827;" +
+                        "-fx-font-family:'Consolas','Courier New',monospace;" +
+                        "-fx-font-size:16;" +
+                        "-fx-font-weight:800;" +
+                        "-fx-padding:6 10;" +
+                        "-fx-background-radius:2;" +
+                        "-fx-border-color:#ecd29b; -fx-border-radius:3; -fx-border-width:1;"
         );
 
+        // Floor dropdown
         for (int i = 0; i <= 10; i++) floorDropdown.getItems().add(i);
         floorDropdown.getSelectionModel().select(0);
         floorDropdown.setPrefWidth(160);
@@ -187,6 +229,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         HBox selectorRow = new HBox(10, new Label("Viewing floor:"), floorDropdown);
         selectorRow.setAlignment(Pos.CENTER);
 
+        // Up/Down
         upBtn.setPrefWidth(90);
         downBtn.setPrefWidth(90);
 
@@ -194,22 +237,44 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
 
-        // If you have a fire button:
-        fireBtn.setPrefWidth(160);
-        VBox controls = new VBox(8, selectorRow, btnRow, fireBtn);
-        controls.setAlignment(Pos.CENTER);
+        // Door image view
+        if (lobbyClosedImg != null) {
+            lobbyDoorView = new ImageView(lobbyClosedImg);
+        } else {
+            lobbyDoorView = new ImageView();
+        }
+        lobbyDoorView.setPreserveRatio(true);
+        lobbyDoorView.setFitWidth(240);
 
-        // If you ALSO have a door row, create a new Node there:
-        // HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
-        // doorRow.setAlignment(Pos.CENTER);
+        // StackPane for image + overlays
+        StackPane doorStack = new StackPane();
+        doorStack.getChildren().add(lobbyDoorView);
 
-        // *** IMPORTANT: add each Node only once ***
-        card.getChildren().clear();
+        // Floor number overlay at top of image
+        VBox floorOverlay = new VBox(display);
+        floorOverlay.setAlignment(Pos.TOP_CENTER);
+        floorOverlay.setPadding(new Insets(14, 18, 0, 0));
+        floorOverlay.setMouseTransparent(true);
+        StackPane.setAlignment(floorOverlay, Pos.TOP_CENTER);
+        doorStack.getChildren().add(floorOverlay);
+
+        // Fire button overlay on image
+        StackPane.setAlignment(fireBtn, Pos.BOTTOM_RIGHT);
+        fireBtn.setTranslateX(-200);
+        fireBtn.setTranslateY(-120);
+        doorStack.getChildren().add(fireBtn);
+
+        // Door: OPEN/CLOSED row — now ABOVE Viewing Floor selector
+        HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
+        doorRow.setAlignment(Pos.CENTER);
+
+        // **New layout order**
         card.getChildren().addAll(
                 title,
-                display,
-                controls
-                // , doorRow   // if you have it, add it here ONCE
+                doorStack,
+                doorRow,        // moved up here
+                selectorRow,    // viewing floor row
+                btnRow          // up/down row
         );
 
         setCenter(card);
@@ -219,14 +284,17 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         floorDropdown.setOnAction(e -> {
             Integer v = floorDropdown.getValue();
             if (v != null) {
-                targetFloor = clamp(v, 0, 10); // in system mode: "floor I am on"
-                display.setText("Floor " + v);
+                targetFloor = clamp(v, 0, 10); // "floor this lobby is representing"
+                display.setText("FLOOR " + v);
             }
             refreshInteractivity();
+
+            if (onViewingFloorChanged != null) {
+                onViewingFloorChanged.run();
+            }
         });
 
         upBtn.setOnAction(e -> {
-            // light the lamp
             upLamp = true;
             downLamp = false;
             applyStyles();
@@ -252,18 +320,11 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
             refreshInteractivity();
         });
 
-        // TODO DANIEL:
-        // Hook up fire button to toggle fireActive and notify controller via onFireToggled.
-        //
         fireBtn.setOnAction(e -> {
-            // 1) Toggle local UI state
             fireActive = !fireActive;
-
-            // 2) Update button look + interactivity
             applyFireStyles();
             refreshInteractivity();
 
-            // 3) Notify controller (DemoSystemApp will publish UI_FIRE_TOGGLED)
             if (onFireToggled != null) {
                 onFireToggled.run();
             }
@@ -274,8 +335,8 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     // Standalone demo travel (disabled in system mode)
     // ============================================================
     private void triggerDemoTravel() {
+        if (systemMode) return; // just in case
         if (currentFloor == targetFloor) {
-            // no-op arrival behavior
             upLamp = false;
             downLamp = false;
             applyStyles();
@@ -294,7 +355,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
             return;
         }
         currentFloor += (targetFloor > currentFloor) ? 1 : -1;
-        display.setText("Floor " + currentFloor);
+        display.setText("FLOOR " + currentFloor);
         if (currentFloor == targetFloor) finishTravel();
     }
 
@@ -302,7 +363,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         moving = false;
         travel.stop();
         upLamp = false;
-        downLamp = false; // dim both on arrival
+        downLamp = false;
         applyStyles();
         refreshInteractivity();
     }
@@ -322,47 +383,69 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         downBtn.setStyle(baseButtonStyle() +
                 (downLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
                         : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
-        // display text is managed when changing floors, not here
     }
 
     private void applyFireStyles() {
+
+        String base =
+                "-fx-font-weight:800;" +
+                        "-fx-font-size:9;" +
+                        "-fx-background-radius:6;" +
+                        "-fx-padding:3 3;" +         // makes it a square-ish shape
+                        "-fx-min-width:30;" +
+                        "-fx-min-height:30;" +        // square button
+                        "-fx-max-width:30;" +
+                        "-fx-max-height:30;" +
+                        "-fx-border-color:#030000; -fx-border-radius:3; -fx-border-width:1;";
+
         if (fireActive) {
-            fireBtn.setText("FIRE ON");
+            fireBtn.setText("FIRE");
             fireBtn.setStyle(
-                    "-fx-font-weight:800;"
-                            + "-fx-background-color:#b91c1c;"
-                            + "-fx-text-fill:white;"
-                            + "-fx-background-radius:9999;"
-                            + "-fx-padding:6 16;"
+                    base +
+                            "-fx-background-color:#b91c1c;" +
+                            "-fx-text-fill:white;"
             );
         } else {
-            fireBtn.setText("FIRE OFF");
+            fireBtn.setText("FIRE");
             fireBtn.setStyle(
-                    "-fx-font-weight:600;"
-                            + "-fx-background-color:#fee2e2;"
-                            + "-fx-text-fill:#7f1d1d;"
-                            + "-fx-background-radius:9999;"
-                            + "-fx-padding:6 16;"
+                    base +
+                            "-fx-background-color:#fee2e2;" +
+                            "-fx-text-fill:#7f1d1d;"
             );
         }
     }
 
     private void applyDoorStyles() {
         String badgeStyle = "-fx-padding:4 10; -fx-background-radius:9999; -fx-font-weight:700;";
-        if (doorState == DoorState.OPEN) {
-            doorBadge.setText("OPEN");
-            doorBadge.setStyle(badgeStyle + "-fx-background-color:#d1fae5; -fx-text-fill:#065f46;");
-        } else {
-            doorBadge.setText("CLOSED");
-            doorBadge.setStyle(badgeStyle + "-fx-background-color:#fee2e2; -fx-text-fill:#7f1d1d;");
+        Image img = null;
+
+        switch (doorState) {
+            case OPEN -> {
+                doorBadge.setText("OPEN");
+                doorBadge.setStyle(badgeStyle + "-fx-background-color:#d1fae5; -fx-text-fill:#065f46;");
+                img = lobbyOpenImg;
+            }
+            case CLOSED -> {
+                doorBadge.setText("CLOSED");
+                doorBadge.setStyle(badgeStyle + "-fx-background-color:#fee2e2; -fx-text-fill:#7f1d1d;");
+                img = lobbyClosedImg;
+            }
+            case OPENING, CLOSING, OBSTRUCTED -> {
+                doorBadge.setText(doorState.name());
+                doorBadge.setStyle(badgeStyle + "-fx-background-color:#fef9c3; -fx-text-fill:#854d0e;");
+                img = (lobbyHalfImg != null) ? lobbyHalfImg : lobbyClosedImg;
+            }
         }
 
+        if (lobbyDoorView != null && img != null) {
+            lobbyDoorView.setImage(img);
+        }
     }
 
     private void refreshInteractivity() {
-        // Only disable controls while the elevator is moving in system mode
         if (systemMode) {
-            boolean disableCalls = moving || fireActive;
+            // Buttons must stay clickable even in fire mode (controller will ignore in fire)
+            boolean disableCalls = moving;
             upBtn.setDisable(disableCalls);
             downBtn.setDisable(disableCalls);
             floorDropdown.setDisable(moving);
@@ -377,3 +460,4 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         return Math.max(lo, Math.min(hi, v));
     }
 }
+
