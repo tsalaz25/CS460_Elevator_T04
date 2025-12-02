@@ -20,13 +20,3 @@ public interface CabinPanelAPI {
     void setDirection(String s);
     void setFireActive(boolean active);
 }
-
-/*
-APIS from Class
-void goToFloor(Floor)
-Floor targetFloor()
-Floor currentFloor()
-Direction currentDirection()
-Boolean stopped()
-Boolean overweightStatus()
-*/

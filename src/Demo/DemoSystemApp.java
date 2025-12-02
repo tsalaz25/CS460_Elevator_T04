@@ -16,26 +16,14 @@ import CabinGUI.CabinPanel;
 import CommandCenterGUI.CommandCenterPanel;
 import Sim.MockSim;   // <<-- restore this
 
-/**
- * System demo:
- *  - Uses InMemoryEventBus + MockSim
- *  - Shows Lobby + Cabin panels
- *  - Adds a separate Command Center window
- *  - Wires UI events into the controller via the bus
- *
- * TODO:
- *  - Swap InMemoryEventBus with SoftwareBus adapter once available.
- *  - Replace MockSim with MotionSim.Simulator when ready.
- */
 public class DemoSystemApp extends Application {
-
     private EventBus bus;
     private LobbyPanel lobbyPanel;
     private CabinPanel cabinPanel;
     private CommandCenterPanel commandCenterPanel;
 
     private ElevatorController controller;
-    private MockSim simulator;   // <<-- restore field
+    private MockSim simulator;
 
     @Override
     public void start(Stage stage) {
@@ -45,7 +33,7 @@ public class DemoSystemApp extends Application {
 
         System.out.println("[DemoSystemApp] Booted with InMemoryEventBus + MockSim");
 
-        Scene scene = new Scene(buildLayout(), 900, 420);
+        Scene scene = new Scene(buildLayout(), 900, 600);
         stage.setTitle("Elevator Control Demo");
         stage.setScene(scene);
         stage.show();
@@ -54,41 +42,40 @@ public class DemoSystemApp extends Application {
     }
 
     private void bootstrapCoreComponents() {
-        bus = new InMemoryEventBus();                 // swap with real bus adapter later
+        bus = new InMemoryEventBus();
         lobbyPanel = new LobbyPanel();
-        lobbyPanel.setSystemMode(true);               // disable self-movement; rely on controller
+        lobbyPanel.setSystemMode(true);
         cabinPanel = new CabinPanel();
         commandCenterPanel = new CommandCenterPanel();
     }
 
     private void wireUiCallbacks() {
-        // Lobby UI → bus
         lobbyPanel.setOnUpPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_UP, lobbyPanel.getTargetFloor()));
 
         lobbyPanel.setOnDownPressed(() ->
                 bus.publish(Topics.UI_HALL_CALL_DOWN, lobbyPanel.getTargetFloor()));
 
-        // Cabin UI → bus
         cabinPanel.setOnFloorSelected(f ->
                 bus.publish(Topics.UI_CABIN_SELECT, f));
 
-        // Fire alarm toggle from Lobby → bus
         lobbyPanel.setOnFireToggled(() ->
                 bus.publish(Topics.UI_FIRE_TOGGLED, lobbyPanel.isFireActive()));
 
-        // Command center fire toggle → bus
         commandCenterPanel.setOnFireToggled(active ->
                 bus.publish(Topics.UI_FIRE_TOGGLED, active));
+
+        cabinPanel.setOnOverloadToggled(active ->
+                bus.publish(Topics.UI_OVERLOAD_TOGGLED, active));
+
+        cabinPanel.setOnObstructToggled(active ->
+                bus.publish(Topics.UI_OBSTRUCT_TOGGLED, active));
     }
 
     private void bootstrapDomainComponents() {
         controller = new ElevatorController(bus, lobbyPanel, cabinPanel, commandCenterPanel);
+        simulator = new MockSim(bus);
 
-        // Restore simulator so CTRL_CMD_MOVE_TO actually produces floor ticks
-        simulator = new MockSim(bus);   // <<-- this was missing
-
-        // Command center "Clear Requests" button → controller
         commandCenterPanel.setOnClearRequests(controller::clearAllRequests);
         lobbyPanel.setOnViewingFloorChanged(controller::pushUi);
     }
@@ -111,4 +98,5 @@ public class DemoSystemApp extends Application {
         launch();
     }
 }
+
 

@@ -36,8 +36,6 @@ import Audio.Sfx;
  *  - Push UI state into Cabin/Lobby/CommandCenter via their APIs.
  */
 public class ElevatorController {
-
-    // ====== FIELDS ======
     private final EventBus bus;
     private final LobbyPanelAPI lobby;
     private final CabinPanelAPI cabin;
@@ -45,13 +43,13 @@ public class ElevatorController {
 
     private int currentFloor = 0;
     private int targetFloor = 0;
+    private boolean overloaded = false;
+    private boolean obstructed = false;
     private boolean moving = false;
     private DoorState doorState = DoorState.OPEN;
 
-    // Fire recall state
     private boolean fireMode = false;
 
-    // Pending requests
     private final Set<Integer> hallUp   = new ConcurrentSkipListSet<>();
     private final Set<Integer> hallDown = new ConcurrentSkipListSet<>();
     private final Set<Integer> cabinSel = new ConcurrentSkipListSet<>();
@@ -61,9 +59,8 @@ public class ElevatorController {
     private final Clip moveStartClip = Sfx.ELEVATOR_START;
     private final Clip doorCloseClip = Sfx.DOOR_CLOSE;
     private final Clip arriveBell    = Sfx.ELEV_BELL;
-    private final Clip deny = Sfx.DENY;
+    private final Clip deny          = Sfx.DENY;
 
-    // ====== CONSTRUCTION ======
     public ElevatorController(EventBus bus,
                               LobbyPanelAPI lobby,
                               CabinPanelAPI cabin) {
@@ -81,20 +78,57 @@ public class ElevatorController {
         this.commandCenter = commandCenter;
 
         wireSubscriptions();
-        pushUi(); // initial state
+        pushUi();
         System.out.println("[CTRL] Controller booted (with command center) | state " + stateSummary());
     }
 
-    // ====== BUS SUBSCRIPTIONS ======
     private void wireSubscriptions() {
+        bus.subscribe(Topics.UI_OVERLOAD_TOGGLED, e -> {
+            overloaded = (boolean) e.payload();
+            if (overloaded) obstructed = false;
 
-        // Hall Up call from lobby at a given floor
+            log("OVERLOAD toggled -> " + (overloaded ? "ON" : "OFF"));
+
+            if (overloaded && moving) {
+                moving = false;
+                targetFloor = currentFloor;
+                bus.publish(Topics.CTRL_CMD_STOP, null);
+            }
+
+            cabin.setOverloaded(overloaded);
+            cabin.setObstructed(obstructed);
+
+            schedule();
+        });
+
+        bus.subscribe(Topics.UI_OBSTRUCT_TOGGLED, e -> {
+            obstructed = (boolean) e.payload();
+            if (obstructed) overloaded = false;
+
+            log("OBSTRUCTION toggled -> " + (obstructed ? "ON" : "OFF"));
+
+            if (obstructed && moving) {
+                moving = false;
+                targetFloor = currentFloor;
+                bus.publish(Topics.CTRL_CMD_STOP, null);
+            }
+
+            cabin.setOverloaded(overloaded);
+            cabin.setObstructed(obstructed);
+
+            if (obstructed) {
+                doorState = DoorState.OBSTRUCTED;
+                pushUi();
+            }
+
+            schedule();
+        });
+
         bus.subscribe(Topics.UI_HALL_CALL_UP, e -> {
             int f = (int) e.payload();
 
-            if (fireMode) {
-                // In fire mode, ignore normal hall calls (UI can still play a denied sound)
-                log("Ignoring Hall UP @" + f + " because fire mode is ACTIVE");
+            if (fireMode || overloaded || obstructed) {
+                log("Denied request (fire/overload/obstruct active)");
                 Sfx.play(deny);
                 return;
             }
@@ -104,12 +138,11 @@ public class ElevatorController {
             schedule();
         });
 
-        // Hall Down call from lobby at a given floor
         bus.subscribe(Topics.UI_HALL_CALL_DOWN, e -> {
             int f = (int) e.payload();
 
-            if (fireMode) {
-                log("Ignoring Hall DOWN @" + f + " because fire mode is ACTIVE");
+            if (fireMode || overloaded || obstructed) {
+                log("Denied request (fire/overload/obstruct active)");
                 Sfx.play(deny);
                 return;
             }
@@ -119,12 +152,11 @@ public class ElevatorController {
             schedule();
         });
 
-        // Cabin floor selection
         bus.subscribe(Topics.UI_CABIN_SELECT, e -> {
             int f = (int) e.payload();
 
-            if (fireMode) {
-                log("Ignoring resources.cabin selection " + f + " because fire mode is ACTIVE");
+            if (fireMode || overloaded || obstructed) {
+                log("Denied request (fire/overload/obstruct active)");
                 Sfx.play(deny);
                 return;
             }
@@ -134,41 +166,32 @@ public class ElevatorController {
             schedule();
         });
 
-        // Fire mode toggle (from Lobby and/or Command Center)
         bus.subscribe(Topics.UI_FIRE_TOGGLED, e -> {
             boolean active = (boolean) e.payload();
             fireMode = active;
             log("Fire mode toggled -> " + (fireMode ? "ACTIVE" : "OFF"));
 
             if (fireMode) {
-                // Start fire alarm loop
                 Sfx.loop(fireLoop);
-
-                // Clear normal requests when entering fire mode
                 hallUp.clear();
                 hallDown.clear();
                 cabinSel.clear();
             } else {
-                // Stop fire alarm when leaving fire mode
                 Sfx.stop(fireLoop);
             }
 
-            // Let schedule() decide recall / behavior based on fireMode flag
             schedule();
         });
 
-        // Simulator reports a floor tick (we moved one floor)
         bus.subscribe(Topics.SIM_FLOOR_TICK, e -> {
             int f = (int) e.payload();
             currentFloor = f;
             log("Tick -> floor " + currentFloor);
 
-            // Arrival detection: while moving, if we tick into the target floor
             if (moving && currentFloor == targetFloor) {
                 moving = false;
                 log("Arrived at target " + currentFloor);
 
-                // Stop movement loop sound & ding
                 Sfx.stop(moveLoop);
                 Sfx.play(arriveBell);
 
@@ -184,58 +207,56 @@ public class ElevatorController {
                     dwell.play();
                 });
             } else {
-                // Just a passing floor: update UI only
                 pushUi();
             }
         });
 
-        // Optional: SIM_ARRIVED (we don't rely on it, but you can log it)
         bus.subscribe(Topics.SIM_ARRIVED, e -> {
             log("SIM_ARRIVED at floor " + e.payload());
-            // Optional cross-check with SIM_FLOOR_TICK.
         });
     }
 
-    // ====== SCHEDULING POLICY ======
     private void schedule() {
+        if (overloaded || obstructed) {
+            moving = false;
+            targetFloor = currentFloor;
 
-        // Fire mode overrides normal scheduling: recall to floor 0 and stay there.
+            doorState = obstructed ? DoorState.OBSTRUCTED : DoorState.OPEN;
+
+            pushUi();
+            return;
+        }
+
         if (fireMode) {
             if (!moving && currentFloor != 0) {
                 targetFloor = 0;
                 moving = true;
                 animateClosingThenDispatch();
             } else if (!moving && currentFloor == 0) {
-                // Already at recall floor; keep doors open.
                 animateOpeningThen(null);
             }
             return;
         }
 
-        // If the car is already moving, don't change the active command
         if (moving) {
             log("schedule(): already moving, ignore new work");
             return;
         }
 
-        // Find the closest pending request
         Integer next = pickNearest();
         log("schedule(): evaluating next stop -> " + next);
 
         if (next == null) {
-            // No pending work → idle at currentFloor
             targetFloor = currentFloor;
             log("schedule(): no pending requests, staying idle");
             pushUi();
             return;
         }
 
-        // If next is the current floor, immediately serve it (no motion)
         if (next == currentFloor) {
             log("Serving current floor " + currentFloor + " without moving");
             clearServed(currentFloor);
 
-            // Doors may already be open; ensure they are, then dwell and re-evaluate.
             animateOpeningThen(() -> {
                 PauseTransition dwell = new PauseTransition(Duration.seconds(0.5));
                 dwell.setOnFinished(ev2 -> schedule());
@@ -244,13 +265,11 @@ public class ElevatorController {
             return;
         }
 
-        // Normal case: move to the selected next floor
         targetFloor = next;
         moving = true;
         animateClosingThenDispatch();
     }
 
-    // Pick the nearest floor with any kind of pending request
     private Integer pickNearest() {
         Integer best = null;
         int bestDist = Integer.MAX_VALUE;
@@ -282,26 +301,20 @@ public class ElevatorController {
         return best;
     }
 
-    // ====== CLEAR SERVED / CLEAR ALL ======
     private void clearServed(int floor) {
         log("clearServed(" + floor + ")");
 
-        // Drop from all queues
         hallUp.remove(floor);
         hallDown.remove(floor);
         cabinSel.remove(floor);
 
-        // Clear lobby lamps when any hall request is served.
         Platform.runLater(() -> {
             lobby.resetUpRequest();
             lobby.resetDownRequest();
-            lobby.setMoving(false); // make sure buttons are enabled again
+            lobby.setMoving(false);
         });
     }
 
-    /**
-     * Clear all pending requests (used by Command Center "Clear Requests" button).
-     */
     public void clearAllRequests() {
         log("clearAllRequests()");
         hallUp.clear();
@@ -310,37 +323,22 @@ public class ElevatorController {
         pushUi();
     }
 
-    // ====== DOOR ANIMATIONS ======
-
-    /**
-     * Animate doors closing (OPEN/OPENING -> CLOSING -> CLOSED) and then
-     * dispatch the move command to the simulator after a short delay.
-     */
     private void animateClosingThenDispatch() {
         Platform.runLater(() -> {
-            // Step 1: start closing (half-open image) + door closing sound
             doorState = DoorState.CLOSING;
             Sfx.play(doorCloseClip);
             pushUi();
 
-            PauseTransition closing = new PauseTransition(Duration.seconds(0.10));  // visible closing
+            PauseTransition closing = new PauseTransition(Duration.seconds(0.10));
             closing.setOnFinished(ev -> {
-
-                // Step 2: fully closed
                 doorState = DoorState.CLOSED;
                 pushUi();
 
-                // Step 3: wait extra 1 second before moving
                 PauseTransition delay = new PauseTransition(Duration.seconds(1.0));
                 delay.setOnFinished(ev2 -> {
                     log("dispatching after close delay to " + targetFloor);
-
-                    // Play one-shot start clip
                     Sfx.play(moveStartClip);
-                    // Start continuous movement loop
                     Sfx.loop(moveLoop);
-
-                    // Tell simulator to move
                     bus.publish(Topics.CTRL_CMD_MOVE_TO, targetFloor);
                 });
                 delay.play();
@@ -349,19 +347,13 @@ public class ElevatorController {
         });
     }
 
-    /**
-     * Animate doors opening (CLOSED/CLOSING -> OPENING -> OPEN).
-     * Optionally run a callback after the doors are fully open.
-     */
     private void animateOpeningThen(Runnable afterOpen) {
         Platform.runLater(() -> {
-            // Step 1: opening / half-open image
             doorState = DoorState.OPENING;
             pushUi();
 
             PauseTransition pt = new PauseTransition(Duration.seconds(0.1));
             pt.setOnFinished(ev -> {
-                // Step 2: fully open
                 doorState = DoorState.OPEN;
                 pushUi();
 
@@ -373,10 +365,8 @@ public class ElevatorController {
         });
     }
 
-    // ====== UI UPDATES ======
     public void pushUi() {
         Platform.runLater(() -> {
-            // ---- CABIN ----
             cabin.setCurrentFloor(currentFloor);
 
             String directionStr;
@@ -390,11 +380,8 @@ public class ElevatorController {
             cabin.setDirection(directionStr);
             cabin.setDoorState(doorState);
 
-            // ---- LOBBY ----
-            // Lobby represents whatever floor its dropdown is on:
             int lobbyFloor = lobby.getTargetFloor();
 
-            // Only show the "real" door state if the car is actually at this lobby's floor.
             DoorState lobbyDoorState =
                     (currentFloor == lobbyFloor) ? doorState : DoorState.CLOSED;
 
@@ -402,7 +389,6 @@ public class ElevatorController {
             lobby.setMoving(moving);
             lobby.setFireActive(fireMode);
 
-            // ---- COMMAND CENTER (if present) ----
             if (commandCenter != null) {
                 commandCenter.setCurrentFloor(currentFloor);
 
@@ -422,7 +408,6 @@ public class ElevatorController {
         });
     }
 
-    // ====== LOGGING ======
     private void log(String message) {
         System.out.println("[CTRL] " + message + " | state " + stateSummary());
     }
@@ -450,5 +435,6 @@ public class ElevatorController {
                 .collect(Collectors.joining(",", "[", "]"));
     }
 }
+
 
 

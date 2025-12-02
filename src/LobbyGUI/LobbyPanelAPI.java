@@ -4,7 +4,6 @@ import CabinGUI.DoorState;
 
 public interface LobbyPanelAPI {
 
-    // Hall-call lamp / query API
     boolean upRequested();
     boolean downRequested();
     void resetUpRequest();

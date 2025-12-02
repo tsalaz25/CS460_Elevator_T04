@@ -15,24 +15,26 @@ import java.util.concurrent.TimeUnit;
  * Lightweigh Motion SIm that advances one floor per tick in response to Controller Commands
  */
 public class MockSim {
-
     private static final long TICK_MS = 1200L;
+
     private final EventBus bus;
     private final ScheduledExecutorService scheduler;
     private final Object stateLock = new Object();
-    private final Deque<Integer> pendingTargets = new  ArrayDeque<>();
+    private final Deque<Integer> pendingTargets = new ArrayDeque<>();
+
     private ScheduledFuture<?> tickerFuture;
     private int currFloor = -1;
     private Integer activeTarget = null;
 
-    // ====== CONSTRUCTION ======
-    public MockSim(EventBus bus){
+    public MockSim(EventBus bus) {
         this.bus = bus;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "MockSimTicker");
             thread.setDaemon(true);
             return thread;
         });
+
+        this.bus.subscribe(Topics.CTRL_CMD_STOP, event -> onStop());
 
         this.bus.subscribe(Topics.CTRL_CMD_MOVE_TO, event -> {
             Object payload = event.payload();
@@ -44,7 +46,15 @@ public class MockSim {
         log("MockSim ready");
     }
 
-    // ====== COMMAND HANDLERS ======
+    private void onStop() {
+        synchronized (stateLock) {
+            pendingTargets.clear();
+            activeTarget = null;
+            stopTickerLocked();
+            logLocked("STOP received: halting motion + clearing targets");
+        }
+    }
+
     private void onMoveTo(int targetFloor) {
         List<Integer> immediateArrivals = new ArrayList<>();
         synchronized (stateLock) {
@@ -59,7 +69,6 @@ public class MockSim {
         }
     }
 
-    // ====== TICK LOOP ======
     private void tick() {
         Integer floorTick = null;
         Integer arrivalFloor = null;
@@ -70,7 +79,6 @@ public class MockSim {
                 stopTickerLocked();
                 return;
             }
-
 
             int direction = Integer.compare(activeTarget, currFloor);
             if (direction == 0) {
@@ -109,7 +117,6 @@ public class MockSim {
         }
     }
 
-    // ====== INTERNAL HELPERS ======
     private void assignNextTargetsLocked(List<Integer> immediateArrivals) {
         while (activeTarget == null && !pendingTargets.isEmpty()) {
             int next = pendingTargets.poll();
@@ -127,10 +134,9 @@ public class MockSim {
         }
     }
 
-    // ======  HELPERS ======
     private void ensureTickerRunningLocked() {
         if (tickerFuture == null || tickerFuture.isCancelled() || tickerFuture.isDone()) {
-            tickerFuture = scheduler.scheduleAtFixedRate(this::tick, 0,  TICK_MS, TimeUnit.MILLISECONDS);
+            tickerFuture = scheduler.scheduleAtFixedRate(this::tick, 0, TICK_MS, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -142,13 +148,11 @@ public class MockSim {
         }
     }
 
-    // ====== LOGGING ======
     private void log(String message) {
         System.out.println("[SIM ] " + message + " | state " + stateSummary());
     }
 
     private void logLocked(String message) {
-        // Caller must hold stateLock
         System.out.println("[SIM ] " + message + " | state " + stateSummaryLocked());
     }
 
@@ -166,13 +170,3 @@ public class MockSim {
     }
 }
 
-
-/*
-* @Tomas MockSim — Create a lightweight simulator that subscribes to CTRL_CMD_MOVE_TO(int) and “moves” one floor
-* per tick (e.g., every ~500–700 ms) from the current floor toward the target. On each tick,
-* publish SIM_FLOOR_TICK(current); when current == target, publish SIM_ARRIVED(current) and stop the tick loop.
-* Decide how to handle mid-travel commands (ignore, queue, or retarget—pick one and keep it consistent),
-* ensure ticks are monotonic (no skipping floors), and make the tick scheduler deterministic.
-* No UI calls from here—only bus publishes. Keep shared state (current, target, moving) safe for the scheduler
-* you choose (Timeline or ScheduledExecutorService).
- */

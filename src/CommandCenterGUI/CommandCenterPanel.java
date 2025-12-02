@@ -14,8 +14,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
-
-    // STATUS LABELS
     private final Label currentFloorLbl  = new Label("Current: 0");
     private final Label targetFloorLbl   = new Label("Target: —");
     private final Label directionLbl     = new Label("Direction: IDLE");
@@ -23,16 +21,13 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
     private final Label doorStateLbl     = new Label("Door: CLOSED");
     private final Label fireModeLbl      = new Label("Fire Mode: OFF");
 
-    // Pending requests
     private final Label hallUpLbl   = new Label("Hall Up: []");
     private final Label hallDownLbl = new Label("Hall Down: []");
     private final Label cabinLbl    = new Label("Cabin Sel: []");
 
-    // Controls
     private final ToggleButton fireToggleBtn = new ToggleButton("Fire Mode");
     private final Button clearAllBtn         = new Button("Clear Requests");
 
-    // Callbacks to outside world (wired in DemoSystemApp)
     private Consumer<Boolean> onFireToggled = active -> {};
     private Runnable onClearRequests        = () -> {};
 
@@ -45,7 +40,6 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
         setSpacing(12);
         setPadding(new Insets(16));
         setAlignment(Pos.TOP_LEFT);
-
         setStyle(
                 "-fx-background-color: linear-gradient(to bottom,#0f172a,#1e293b);" +
                         "-fx-border-color: #64748b; -fx-border-radius: 8; -fx-background-radius: 8;"
@@ -68,7 +62,8 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
         fireToggleBtn.setStyle("-fx-background-radius: 6;");
         clearAllBtn.setStyle("-fx-background-radius: 6;");
 
-        VBox statusBox = new VBox(6,
+        VBox statusBox = new VBox(
+                6,
                 currentFloorLbl,
                 targetFloorLbl,
                 directionLbl,
@@ -81,7 +76,8 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
 
         Label pendingTitle = new Label("Pending Requests:");
         pendingTitle.setTextFill(Color.web("#e5e7eb"));
-        VBox pendingBox = new VBox(6,
+        VBox pendingBox = new VBox(
+                6,
                 pendingTitle,
                 hallUpLbl,
                 hallDownLbl,
@@ -92,7 +88,8 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
 
         Label controlsTitle = new Label("Controls:");
         controlsTitle.setTextFill(Color.web("#e5e7eb"));
-        VBox controlsBox = new VBox(8,
+        VBox controlsBox = new VBox(
+                8,
                 controlsTitle,
                 fireToggleBtn,
                 clearAllBtn
@@ -112,8 +109,6 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
         clearAllBtn.setOnAction(e -> onClearRequests.run());
     }
 
-    // === Wiring hooks for DemoSystemApp ===
-
     public void setOnFireToggled(Consumer<Boolean> handler) {
         this.onFireToggled = (handler != null) ? handler : active -> {};
     }
@@ -122,8 +117,6 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
         this.onClearRequests = (handler != null) ? handler : () -> {};
     }
 
-    // === CommandCenterPanelAPI implementation ===
-
     @Override
     public void setCurrentFloor(int floor) {
         currentFloorLbl.setText("Current: " + floor);
@@ -131,11 +124,7 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
 
     @Override
     public void setTargetFloor(int targetFloor, boolean hasTarget) {
-        if (hasTarget) {
-            targetFloorLbl.setText("Target: " + targetFloor);
-        } else {
-            targetFloorLbl.setText("Target: —");
-        }
+        targetFloorLbl.setText(hasTarget ? "Target: " + targetFloor : "Target: —");
     }
 
     @Override
@@ -182,5 +171,6 @@ public class CommandCenterPanel extends VBox implements CommandCenterPanelAPI {
                 .collect(Collectors.joining(",", "[", "]"));
     }
 }
+
 
 

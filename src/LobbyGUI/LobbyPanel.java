@@ -31,34 +31,24 @@ import java.net.URL;
  *   - Timeline simulates movement floor-by-floor.
  */
 public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
-
-    // ------------------------------------------------------------
-    // Integration callbacks
-    // ------------------------------------------------------------
     private Runnable onUpPressed;
     private Runnable onDownPressed;
     private Runnable onFireToggled;
 
-    private boolean systemMode = true;  // true => no internal travel; UI is "dumb"
+    private boolean systemMode = true;
 
-    // ------------------------------------------------------------
-    // UI state
-    // ------------------------------------------------------------
     private boolean upLamp = false;
     private boolean downLamp = false;
 
-    private int currentFloor = 0;   // only used by demo mode
-    private int targetFloor = 0;    // "viewing floor" in system mode / demo target in demo mode
-    private boolean moving = false; // used for disabling controls
+    private int currentFloor = 0;
+    private int targetFloor = 0;
+    private boolean moving = false;
 
     private boolean fireActive = false;
 
     private DoorState doorState = DoorState.CLOSED;
     private final Label doorBadge = new Label("CLOSED");
 
-    // ------------------------------------------------------------
-    // Controls
-    // ------------------------------------------------------------
     private final Button upBtn   = new Button("▲");
     private final Button downBtn = new Button("▼");
     private final Button fireBtn = new Button("FIRE");
@@ -67,21 +57,16 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
     private final Label display = new Label("FLOOR 0");
     private final Label title   = new Label("Lobby Panel");
 
-    // Door images
     private Image lobbyClosedImg;
     private Image lobbyHalfImg;
     private Image lobbyOpenImg;
     private ImageView lobbyDoorView;
 
-    // ------------------------------------------------------------
-    // Standalone demo travel
-    // ------------------------------------------------------------
     private final Timeline travel =
             new Timeline(new KeyFrame(Duration.millis(700), e -> stepTowardTarget()));
 
-    // ============================================================
-    // Constructor
-    // ============================================================
+    private Runnable onViewingFloorChanged;
+
     public LobbyPanel() {
         loadDoorImages();
         buildUI();
@@ -93,29 +78,27 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         applyFireStyles();
     }
 
-    // ============================================================
-    // Public integration helpers
-    // ============================================================
-    public void setOnUpPressed(Runnable r)   { this.onUpPressed = r; }
-    public void setOnDownPressed(Runnable r) { this.onDownPressed = r; }
-    public void setSystemMode(boolean v)     { this.systemMode = v; }
+    public void setOnUpPressed(Runnable r) {
+        this.onUpPressed = r;
+    }
 
-    // ============================================================
-    // Door images
-    // ============================================================
+    public void setOnDownPressed(Runnable r) {
+        this.onDownPressed = r;
+    }
+
+    public void setSystemMode(boolean v) {
+        this.systemMode = v;
+    }
+
     private void loadDoorImages() {
-        // resources root: .../resources/lobby/...
         lobbyClosedImg = loadImage("/resources/lobby/lobby_closed.png");
         lobbyHalfImg   = loadImage("/resources/lobby/lobby_half.png");
         lobbyOpenImg   = loadImage("/resources/lobby/lobby_open.png");
     }
 
-    private Runnable onViewingFloorChanged;
-
     public void setOnViewingFloorChanged(Runnable r) {
         this.onViewingFloorChanged = r;
     }
-
 
     private Image loadImage(String path) {
         try {
@@ -133,9 +116,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         applyDoorStyles();
     }
 
-    // ============================================================
-    // Fire callbacks for controller wiring
-    // ============================================================
     @Override
     public void setOnFireToggled(Runnable r) {
         this.onFireToggled = r;
@@ -153,39 +133,51 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         return fireActive;
     }
 
-    // ============================================================
-    // LobbyPanelAPI core
-    // ============================================================
-    @Override public boolean upRequested()   { return upLamp; }
-    @Override public boolean downRequested() { return downLamp; }
+    @Override
+    public boolean upRequested() {
+        return upLamp;
+    }
 
-    @Override public void resetUpRequest() {
+    @Override
+    public boolean downRequested() {
+        return downLamp;
+    }
+
+    @Override
+    public void resetUpRequest() {
         upLamp = false;
         applyStyles();
         refreshInteractivity();
     }
 
-    @Override public void resetDownRequest() {
+    @Override
+    public void resetDownRequest() {
         downLamp = false;
         applyStyles();
         refreshInteractivity();
     }
 
-    @Override public int getCurrentFloor() { return currentFloor; }
+    @Override
+    public int getCurrentFloor() {
+        return currentFloor;
+    }
 
-    // In system mode, this means: "which floor is this lobby representing?"
-    @Override public int getTargetFloor() { return targetFloor; }
+    @Override
+    public int getTargetFloor() {
+        return targetFloor;
+    }
 
-    @Override public boolean isMoving() { return moving; }
+    @Override
+    public boolean isMoving() {
+        return moving;
+    }
 
-    @Override public void setMoving(boolean m) {
+    @Override
+    public void setMoving(boolean m) {
         this.moving = m;
         refreshInteractivity();
     }
 
-    // ============================================================
-    // UI setup
-    // ============================================================
     private void buildUI() {
         setPadding(new Insets(12));
         setBackground(new Background(new BackgroundFill(
@@ -207,7 +199,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
         title.setStyle("-fx-font-size:18px; -fx-font-weight:800; -fx-text-fill:#16233f;");
 
-        // "Floor X" display
         display.setMinWidth(50);
         display.setAlignment(Pos.CENTER);
         display.setStyle(
@@ -221,7 +212,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
                         "-fx-border-color:#ecd29b; -fx-border-radius:3; -fx-border-width:1;"
         );
 
-        // Floor dropdown
         for (int i = 0; i <= 10; i++) floorDropdown.getItems().add(i);
         floorDropdown.getSelectionModel().select(0);
         floorDropdown.setPrefWidth(160);
@@ -229,7 +219,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         HBox selectorRow = new HBox(10, new Label("Viewing floor:"), floorDropdown);
         selectorRow.setAlignment(Pos.CENTER);
 
-        // Up/Down
         upBtn.setPrefWidth(90);
         downBtn.setPrefWidth(90);
 
@@ -237,7 +226,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         btnRow.setAlignment(Pos.CENTER);
         btnRow.setPadding(new Insets(6));
 
-        // Door image view
         if (lobbyClosedImg != null) {
             lobbyDoorView = new ImageView(lobbyClosedImg);
         } else {
@@ -246,11 +234,9 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         lobbyDoorView.setPreserveRatio(true);
         lobbyDoorView.setFitWidth(240);
 
-        // StackPane for image + overlays
         StackPane doorStack = new StackPane();
         doorStack.getChildren().add(lobbyDoorView);
 
-        // Floor number overlay at top of image
         VBox floorOverlay = new VBox(display);
         floorOverlay.setAlignment(Pos.TOP_CENTER);
         floorOverlay.setPadding(new Insets(14, 18, 0, 0));
@@ -258,23 +244,20 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         StackPane.setAlignment(floorOverlay, Pos.TOP_CENTER);
         doorStack.getChildren().add(floorOverlay);
 
-        // Fire button overlay on image
         StackPane.setAlignment(fireBtn, Pos.BOTTOM_RIGHT);
         fireBtn.setTranslateX(-200);
         fireBtn.setTranslateY(-120);
         doorStack.getChildren().add(fireBtn);
 
-        // Door: OPEN/CLOSED row — now ABOVE Viewing Floor selector
         HBox doorRow = new HBox(6, new Label("Door:"), doorBadge);
         doorRow.setAlignment(Pos.CENTER);
 
-        // **New layout order**
         card.getChildren().addAll(
                 title,
                 doorStack,
-                doorRow,        // moved up here
-                selectorRow,    // viewing floor row
-                btnRow          // up/down row
+                doorRow,
+                selectorRow,
+                btnRow
         );
 
         setCenter(card);
@@ -284,7 +267,7 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         floorDropdown.setOnAction(e -> {
             Integer v = floorDropdown.getValue();
             if (v != null) {
-                targetFloor = clamp(v, 0, 10); // "floor this lobby is representing"
+                targetFloor = clamp(v, 0, 10);
                 display.setText("FLOOR " + v);
             }
             refreshInteractivity();
@@ -331,11 +314,8 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         });
     }
 
-    // ============================================================
-    // Standalone demo travel (disabled in system mode)
-    // ============================================================
     private void triggerDemoTravel() {
-        if (systemMode) return; // just in case
+        if (systemMode) return;
         if (currentFloor == targetFloor) {
             upLamp = false;
             downLamp = false;
@@ -368,32 +348,32 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         refreshInteractivity();
     }
 
-    // ============================================================
-    // Visuals & interactivity
-    // ============================================================
     private String baseButtonStyle() {
         return "-fx-font-size:20; -fx-font-weight:800; -fx-padding:10 12;" +
                 "-fx-background-radius:12; -fx-border-radius:12; -fx-border-color:#d7deea; -fx-border-width:1;";
     }
 
     private void applyStyles() {
-        upBtn.setStyle(baseButtonStyle() +
-                (upLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
-                        : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
-        downBtn.setStyle(baseButtonStyle() +
-                (downLamp ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
-                        : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
+        upBtn.setStyle(
+                baseButtonStyle() +
+                        (upLamp
+                                ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
+                                : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
+        downBtn.setStyle(
+                baseButtonStyle() +
+                        (downLamp
+                                ? "; -fx-background-color:#fde68a; -fx-text-fill:#1b2a4e;"
+                                : "; -fx-background-color:#f3f4f6; -fx-text-fill:#1f2937;"));
     }
 
     private void applyFireStyles() {
-
         String base =
                 "-fx-font-weight:800;" +
                         "-fx-font-size:9;" +
                         "-fx-background-radius:6;" +
-                        "-fx-padding:3 3;" +         // makes it a square-ish shape
+                        "-fx-padding:3 3;" +
                         "-fx-min-width:30;" +
-                        "-fx-min-height:30;" +        // square button
+                        "-fx-min-height:30;" +
                         "-fx-max-width:30;" +
                         "-fx-max-height:30;" +
                         "-fx-border-color:#030000; -fx-border-radius:3; -fx-border-width:1;";
@@ -403,15 +383,13 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
             fireBtn.setStyle(
                     base +
                             "-fx-background-color:#b91c1c;" +
-                            "-fx-text-fill:white;"
-            );
+                            "-fx-text-fill:white;");
         } else {
             fireBtn.setText("FIRE");
             fireBtn.setStyle(
                     base +
                             "-fx-background-color:#fee2e2;" +
-                            "-fx-text-fill:#7f1d1d;"
-            );
+                            "-fx-text-fill:#7f1d1d;");
         }
     }
 
@@ -444,7 +422,6 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
 
     private void refreshInteractivity() {
         if (systemMode) {
-            // Buttons must stay clickable even in fire mode (controller will ignore in fire)
             boolean disableCalls = moving;
             upBtn.setDisable(disableCalls);
             downBtn.setDisable(disableCalls);
@@ -460,4 +437,5 @@ public class LobbyPanel extends BorderPane implements LobbyPanelAPI {
         return Math.max(lo, Math.min(hi, v));
     }
 }
+
 
